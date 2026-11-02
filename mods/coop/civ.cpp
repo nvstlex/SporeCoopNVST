@@ -39,7 +39,7 @@ constexpr uintptr_t kVSpatial = 0x34, kVPos = 0x38, kVRot = 0x44, kVSelected = 0
 constexpr uintptr_t kCityPos = 0x124, kCitySpecialty = 0x540, kCitySlots = 0x43C,
                     kCityCapture = 0x748, // + 4: capturing political id
                     kCityBuildings = 0x340, kBuildingState = 0x120 + 0x34; // combatant state, 2 = destroyed
-constexpr uint8_t kShared = 0xFD; // a city everybody may use (the capital while cities < players)
+constexpr uint8_t kShared = rivals::kSharedCityOwner; // a city everybody may use (the capital while cities < players)
 constexpr uintptr_t kCivCities = 0x9C;
 constexpr uint32_t kMsgActivated = 0x287259F6, kBtnLand = 0x62D6902, kBtnWater = 0x62D6908, kBtnAir = 0x62D690F,
                    kBtnPlanner = 0x62D5618, kBuildingType = 0x0E9CB8BA;
@@ -1009,18 +1009,17 @@ static void host_assign_cities(const std::vector<uint8_t>& players)
     net::Vec3 cap = city_pos(cities[0]);
     std::sort(cities.begin() + 1, cities.end(),
               [&](void* a, void* b) { return net::dist(city_pos(a), cap) < net::dist(city_pos(b), cap); });
-    // fewer cities than players: the capital is shared so that everybody can play from the start
-    bool shared = cities.size() < players.size();
+    // Fewer cities than players: the capital is shared so everybody can play from the start.
+    const bool shared = cities.size() < players.size();
     if (shared != (g_city_owner.count(cities[0]) && g_city_owner[cities[0]] == kShared))
         resplit = true;
-    size_t k = 0;
     for (size_t i = 0; i < cities.size(); i++) {
         if (!resplit && g_city_owner.count(cities[i]))
             continue;
         if (g_city_gifted.count(cities[i]) && g_city_owner.count(cities[i]) &&
             std::find(players.begin(), players.end(), g_city_owner[cities[i]]) != players.end())
             continue; // a gift stays with its new owner while that player is here
-        g_city_owner[cities[i]] = i == 0 ? (shared ? kShared : 0) : players[(1 + k++) % players.size()];
+        g_city_owner[cities[i]] = rivals::initial_city_owner(i, cities.size(), players);
     }
 }
 
