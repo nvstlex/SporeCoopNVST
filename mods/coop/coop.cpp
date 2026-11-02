@@ -4997,7 +4997,42 @@ extern "C" SK_EXPORT const SkModInfo* sporekit_mod_main(const SkHost* host, SkMo
                            H->out_printf(out, "host only (create the session first)");
                            return 1;
                        }
-                       if (argc >= 3) {
+                       if (argc >= 2 && !strcmp(argv[1], "players")) {
+                           for (const auto& player : g_sess.players())
+                               H->out_printf(out, "%u: %s", player.id, player.name.c_str());
+                           return 0;
+                       }
+                       if (argc >= 5 && !strcmp(argv[1], "relation")) {
+                           char* end_a = nullptr;
+                           char* end_b = nullptr;
+                           long a = strtol(argv[2], &end_a, 10);
+                           long b = strtol(argv[3], &end_b, 10);
+                           if (!end_a || *end_a || !end_b || *end_b || a < 0 || b < 0 ||
+                               a >= rivals::kMaxPlayers || b >= rivals::kMaxPlayers || a == b) {
+                               H->out_printf(out, "usage: coop.rivals relation <player-id> <player-id> <neutral|ally|war>");
+                               return 1;
+                           }
+                           bool have_a = false, have_b = false;
+                           for (const auto& player : g_sess.players()) {
+                               have_a |= player.id == a;
+                               have_b |= player.id == b;
+                           }
+                           if (!have_a || !have_b) {
+                               H->out_printf(out, "both player IDs must be in the current session");
+                               return 1;
+                           }
+                           rivals::Relation relation;
+                           if (!strcmp(argv[4], "neutral")) relation = rivals::Relation::Neutral;
+                           else if (!strcmp(argv[4], "ally")) relation = rivals::Relation::Ally;
+                           else if (!strcmp(argv[4], "war")) relation = rivals::Relation::War;
+                           else {
+                               H->out_printf(out, "relation must be neutral, ally or war");
+                               return 1;
+                           }
+                           g_rivals_state.set_relation((uint8_t)a, (uint8_t)b, relation);
+                           rivals_broadcast_state();
+                           g_lobby_dirty = true;
+                       } else if (argc >= 3) {
                            rivals::Stage stage;
                            if (!rivals_parse_stage(argv[1], stage)) {
                                H->out_printf(out, "unknown stage: %s", argv[1]);
@@ -5021,6 +5056,12 @@ extern "C" SK_EXPORT const SkModInfo* sporekit_mod_main(const SkHost* host, SkMo
                            H->out_printf(out, "%s: %s", rivals_stage_name(stage),
                                g_rivals_state.stage_mode(stage) == rivals::StageMode::Rivals ? "rivals" : "together");
                        }
+                       const char* rel[] = {"neutral", "ally", "war"};
+                       const auto players = g_sess.players();
+                       for (size_t i = 0; i < players.size(); ++i)
+                           for (size_t j = i + 1; j < players.size(); ++j)
+                               H->out_printf(out, "%s / %s: %s", players[i].name.c_str(), players[j].name.c_str(),
+                                   rel[(uint8_t)g_rivals_state.get_relation(players[i].id, players[j].id)]);
                        return 0;
                    },
                    nullptr, SK_CMD_MAIN_THREAD);
