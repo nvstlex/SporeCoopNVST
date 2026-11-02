@@ -182,10 +182,22 @@ void on_session_change()
         r.have = false;
 }
 
-void on_player_join(net::Role role)
+void on_player_join(net::Session& s, net::Role role, uint8_t id)
 {
     if (net::reset_on_join(role == net::Role::Host, g_join_keep_fix))
         on_session_change(); // the host: the newcomer gets the totals at once
+    if (role == net::Role::Host && id != 0) {
+        // A guest joining an active Rivals stage has no saved faction balance yet. Start it at
+        // zero rather than cloning the host's private balance into a second economy.
+        for (auto& r : g_res) {
+            if (r.mode != modes::kSpace && r.mode == g_mode && own_budget(r)) {
+                net::Writer w;
+                w.u8(r.id);
+                w.f64(0);
+                s.send_reliable_to(id, net::MSG_RIVALS_RES, w);
+            }
+        }
+    }
 }
 
 void on_session_end()
