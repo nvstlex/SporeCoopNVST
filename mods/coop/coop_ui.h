@@ -42,6 +42,10 @@ struct Api {
     std::function<void(bool)> set_ready;
     std::function<void()> share_world; // host (during a vote: start the evolution now)
     std::function<bool()> vote_active;
+    // Per-stage session rules (0 = Together, 1 = Rivals); only the host may change them.
+    std::function<int(int stage)> stage_mode;
+    std::function<bool()> can_edit_stage_modes;
+    std::function<void(int stage)> toggle_stage_mode;
     // own creation of the current stage: kind 0 creature / 1 cell / 2 ship, its name ("" = the
     // world's own), how many own creations of that kind exist; false = not shown. cycle: -1 / +1
     std::function<bool(int& kind, std::string& name, int& own)> creation;
