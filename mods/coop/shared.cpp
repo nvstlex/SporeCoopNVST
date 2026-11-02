@@ -330,6 +330,20 @@ void on_message(net::Session& s, uint8_t type, uint8_t from, net::Reader& rd)
     double v = rd.f64();
     if (!rd.ok() || !std::isfinite(v))
         return;
+    if (type == net::MSG_RIVALS_RES) {
+        if (s.role() != net::Role::Client || from != 0 || v < 0 || v > 1e9)
+            return;
+        for (auto& r : g_res) {
+            if (r.id != id || r.mode == modes::kSpace || !own_budget(r))
+                continue;
+            r.set(v);
+            r.synced = v;
+            r.have = false;
+            r.own_budget_last = true;
+            return;
+        }
+        return;
+    }
     for (auto& r : g_res) {
         if (r.id != id)
             continue;
