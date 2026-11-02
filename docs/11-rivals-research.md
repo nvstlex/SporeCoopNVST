@@ -86,6 +86,26 @@ neutral/ally rejection, War acceptance in both directions, and that NPC attacks 
 mode are unchanged. This hook does not create separate native tribes and does not yet change
 NPC AI or NPC diplomacy.
 
+## 4. Civilization combat relation hook and inventory diagnostic
+
+The shared relation table is now consumed by Civilization attack orders. The RE notes in
+`docs/re/civ.md` identify native order type 1 as an attack on a target and type 2 as a
+military city attack. In Civilization Rivals, a tracked player vehicle may use these orders
+against another player's tracked vehicle or city only when the pair is at war. Neutral and
+allied pairs are blocked. The first city in the native player civilization's city vector is
+treated as the capital and is protected even during war. The host checks its own orders and
+revalidates guest orders before applying them. NPC/untracked attackers and Together mode keep
+the original game path.
+
+The read-only `coop.civ factions` diagnostic lists native civilization pointers, political IDs,
+the player-owned flag, wealth, city and vehicle vector counts, and culture-set pointers. Run it
+in the same disposable Civilization world on host and guest. Pointers are process-local; compare
+political IDs and counts rather than pointer values across processes.
+
+Runtime verification still needs two players: check neutral/ally rejection, War acceptance for
+non-capital cities and vehicles, capital protection during war, and unchanged NPC/Together
+behaviour. This does not create separate native civilizations or separate AI/economies.
+
 ## 5. Space stage: existing Rivals system
 
 Space is not an empty stage. `space_rivalry.cpp` already implements a dedicated multiplayer
@@ -112,26 +132,6 @@ protocol with the generic matrix without preserving reconnect restoration and da
 Runtime verification should cover two players through split, income/spending, alliance, war,
 ship damage, peace, merge and reconnect/reload budget restoration. Existing debug entry point:
 `coop.space rivalry` (status, mode, ally, accept, war, peace, and diagnostic counters).
-
-## 4. Civilization combat relation hook and inventory diagnostic
-
-The shared relation table is now consumed by Civilization attack orders. The RE notes in
-`docs/re/civ.md` identify native order type 1 as an attack on a target and type 2 as a
-military city attack. In Civilization Rivals, a tracked player vehicle may use these orders
-against another player's tracked vehicle or city only when the pair is at war. Neutral and
-allied pairs are blocked. The first city in the native player civilization's city vector is
-treated as the capital and is protected even during war. The host checks its own orders and
-revalidates guest orders before applying them. NPC/untracked attackers and Together mode keep
-the original game path.
-
-The read-only `coop.civ factions` diagnostic lists native civilization pointers, political IDs,
-the player-owned flag, wealth, city and vehicle vector counts, and culture-set pointers. Run it
-in the same disposable Civilization world on host and guest. Pointers are process-local; compare
-political IDs and counts rather than pointer values across processes.
-
-Runtime verification still needs two players: check neutral/ally rejection, War acceptance for
-non-capital cities and vehicles, capital protection during war, and unchanged NPC/Together
-behaviour. This does not create separate native civilizations or separate AI/economies.
 
 ## 6. Safe implementation order
 
