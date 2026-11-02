@@ -2444,8 +2444,8 @@ std::string debug(const std::vector<std::string>& a)
         return out + b;
     }
     if (!a.empty() && a[0] == "factions") { // read-only inventory of native civilizations (Rivals research)
-        if (game::mode_id() != modes::kCiv || !nm())
-            return "enter Civilization stage first";
+        if (!g_ok || game::mode_id() != modes::kCiv || !nm() || !a_GetAllCivs || !a_GetMoney)
+            return "enter Civilization stage first (required symbols unavailable)";
         const auto me_civ = player_civ();
         const auto civs = vec_of(thiscall<void*>(a_GetAllCivs, nm()));
         std::string out;
