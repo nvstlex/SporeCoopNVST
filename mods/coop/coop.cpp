@@ -3339,7 +3339,7 @@ void setup_callbacks()
             }
             return;
         }
-        if (type == net::MSG_RES || type == net::MSG_RES_ADD) {
+        if (type == net::MSG_RES || type == net::MSG_RES_ADD || type == net::MSG_RIVALS_RES) {
             shared::on_message(g_sess, type, from, r);
             return;
         }
