@@ -57,7 +57,7 @@ The host picks the mode of every stage before the game starts:
  Cell           ( ) Together (o) Rivals
  Creature       ( ) Together (o) Rivals
  Tribe          ( ) Together (o) Rivals
- Civilization   ( ) Together (o) Rivals
+ Civilization   (o) Together (co-op only)
  Space          ( ) Together (o) Rivals
  Catch-up timer [5 min]   Draft picks [3]   Bases [Middle]
 ```
