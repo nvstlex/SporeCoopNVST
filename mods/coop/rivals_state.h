@@ -4,6 +4,8 @@
 
 #include <array>
 #include <cstdint>
+#include <cstddef>
+#include <vector>
 
 #include "net/buffer.h"
 
@@ -72,6 +74,19 @@ struct SessionState {
         }
     }
 };
+
+// Owner assignment for the initial cities of the shared Civilization nation. City 0 is
+// the capital; it stays shared until the team has at least one city per player. Further
+// cities are distributed round-robin in the sorted roster order (host is player 0).
+constexpr uint8_t kSharedCityOwner = 0xFD;
+inline uint8_t initial_city_owner(size_t city_index, size_t city_count, const std::vector<uint8_t>& players)
+{
+    if (players.empty() || city_index >= city_count)
+        return 0xFF;
+    if (city_index == 0)
+        return city_count < players.size() ? kSharedCityOwner : players[0];
+    return players[city_index % players.size()];
+}
 
 // Civilization's current adapter is cooperative city ownership inside one native nation.
 // Even if an old/malformed session snapshot contains Rivals for this stage, expose Together.
