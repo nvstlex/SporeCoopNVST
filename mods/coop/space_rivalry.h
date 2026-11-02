@@ -13,5 +13,7 @@ namespace rivalry {
 // we are at war with: it is sent to that player (who applies it to its own ship) and the hook
 // must not call the game on the puppet.
 bool on_hit(void* ufo, void* attacker, float dmg, int type, const float* dir);
+// Host-side switch used by the multi-stage session settings; empty error means accepted.
+std::string set_enabled(bool on);
 
 } // namespace rivalry
