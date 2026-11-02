@@ -9,6 +9,7 @@
 #include "space_ext.h"
 #include "sporekit_game.hpp"
 #include "fixes.h"
+#include "rivals_state.h"
 
 namespace shared {
 
@@ -107,6 +108,7 @@ struct Res {
     void (*set)(double);
     // state
     bool have = false;   // synced at least once in this session
+    bool own_budget_last = false; // Tribe/Civ: merge the local balance on return from Rivals
     double synced = 0;   // value after the last sync (guest) / last broadcast (host)
     net::SharedLedger led; // guest: changes not sent yet / sent and not counted by the host yet
     double last_send = 0;
@@ -155,8 +157,18 @@ static Res g_res[] = {
 
 static uint32_t g_mode; // the game mode of the last tick: status / debug_add use its resources
 
-// rivals mode (space_rivalry.cpp): every player has its own Space budget, nothing is shared
-static bool own_budget(const Res& r) { return r.mode == modes::kSpace && spaceext::rivals(); }
+// Tribe/Civ Rivals economies are local to each player's game copy. Space keeps its dedicated
+// ledger and transition logic in space_rivalry.cpp.
+static bool own_budget(const Res& r)
+{
+    if (r.mode == modes::kSpace)
+        return spaceext::rivals();
+    if (r.mode == modes::kTribe)
+        return rivals::current_stage_mode(rivals::Stage::Tribe) == rivals::StageMode::Rivals;
+    if (r.mode == modes::kCiv)
+        return rivals::current_stage_mode(rivals::Stage::Civilization) == rivals::StageMode::Rivals;
+    return false;
+}
 
 void init(const SkHost* host, SkMod* mod)
 {
