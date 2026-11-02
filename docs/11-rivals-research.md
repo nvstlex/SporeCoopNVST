@@ -88,25 +88,37 @@ neutral/ally rejection, War acceptance in both directions, and that NPC attacks 
 mode are unchanged. This hook does not create separate native tribes and does not yet change
 NPC AI or NPC diplomacy.
 
-## 4. Civilization combat relation hook and inventory diagnostic
+## 4. Civilization co-op cities
 
-The shared relation table is now consumed by Civilization attack orders. The RE notes in
-`docs/re/civ.md` identify native order type 1 as an attack on a target and type 2 as a
-military city attack. In Civilization Rivals, a tracked player vehicle may use these orders
-against another player's tracked vehicle or city only when the pair is at war. Neutral and
-allied pairs are blocked. The first city in the native player civilization's city vector is
-treated as the capital and is protected even during war. The host checks its own orders and
-revalidates guest orders before applying them. NPC/untracked attackers and Together mode keep
-the original game path.
+Civilization is not a player-vs-player Rivals stage in the current co-op design. All connected
+players remain members of the same native player civilization and cooperate against NPC nations.
+Do not create separate cCivilization objects or allocate political IDs for this mode.
 
-The read-only `coop.civ factions` diagnostic lists native civilization pointers, political IDs,
-the player-owned flag, wealth, city and vehicle vector counts, and culture-set pointers. Run it
-in the same disposable Civilization world on host and guest. Pointers are process-local; compare
-political IDs and counts rather than pointer values across processes.
+The existing implementation already provides the main building blocks:
 
-Runtime verification still needs two players: check neutral/ally rejection, War acceptance for
-non-capital cities and vehicles, capital protection during war, and unchanged NPC/Together
-behaviour. This does not create separate native civilizations or separate AI/economies.
+* host_assign_cities assigns city-owner overlays to up to four session players. If there are
+  fewer cities than players, the capital is shared; once there are enough cities, the capital is
+  assigned to player 0 and the remaining cities are distributed to the other players.
+* Vehicles inherit the owner of the city that produced them. The host validates guest vehicle
+  commands and simulates the authoritative world; guests mirror the cities, buildings, vehicles
+  and ownership state.
+* City menus prevent a player from buying vehicles or editing a city owned by another player.
+  The shared capital remains available while the team has fewer cities than players.
+* Captures are attributed to the closest player's vehicles, so a captured NPC city joins that
+  player's city group.
+* The shared treasury and existing joint-siege bonus reward coordinated attacks on NPC cities.
+
+The Civilization Rivals attack-order gate was removed. It was conceptually wrong for this mode:
+it blocked attacks on teammates instead of making the whole party fight NPC civilizations
+together. effective_stage_mode now always reports Civilization as Together, and the lobby rejects
+attempts to switch it to Rivals. The native city/vehicle ownership overlay is sufficient for the
+current requirement; separate-native-civilization research remains relevant only if a future
+design explicitly calls for independent nations.
+
+Runtime verification should focus on four-player co-op: one city with four players (shared
+capital), then two/three/four player cities; city ownership assignment; each player's city menu
+and vehicle control; joint attacks on NPC cities; captured-city attribution; reconnect and world
+reload. Verify that no attack order against an NPC is blocked.
 
 ## 5. Space stage: existing Rivals system
 
