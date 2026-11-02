@@ -83,6 +83,7 @@ inline bool allows_player_attack(const SessionState& state, uint8_t attacker, ui
 
 // Implemented by coop.cpp: the authoritative table shared with stage modules.
 StageMode current_stage_mode(Stage stage);
+Relation current_relation(uint8_t a, uint8_t b);
 
 // Fixed-size wire format: version, five stage modes, then the six unordered player pairs.
 // Decode into a temporary so malformed packets never partially mutate live session state.
