@@ -21,6 +21,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <deque>
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
@@ -5015,8 +5016,8 @@ extern "C" SK_EXPORT const SkModInfo* sporekit_mod_main(const SkHost* host, SkMo
                        if (argc >= 5 && !strcmp(argv[1], "relation")) {
                            char* end_a = nullptr;
                            char* end_b = nullptr;
-                           long a = strtol(argv[2], &end_a, 10);
-                           long b = strtol(argv[3], &end_b, 10);
+                           long a = std::strtol(argv[2], &end_a, 10);
+                           long b = std::strtol(argv[3], &end_b, 10);
                            if (!end_a || *end_a || !end_b || *end_b || a < 0 || b < 0 ||
                                a >= rivals::kMaxPlayers || b >= rivals::kMaxPlayers || a == b) {
                                H->out_printf(out, "usage: coop.rivals relation <player-id> <player-id> <neutral|ally|war>");
