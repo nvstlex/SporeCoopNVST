@@ -4787,6 +4787,10 @@ SkModInfo g_info = {SK_ABI_VERSION, "coop", COOP_VERSION, on_unload};
 
 } // namespace
 
+namespace rivals {
+StageMode current_stage_mode(Stage stage) { return g_rivals_state.stage_mode(stage); }
+}
+
 extern "C" SK_EXPORT const SkModInfo* sporekit_mod_main(const SkHost* host, SkMod* self)
 {
     H = host;
