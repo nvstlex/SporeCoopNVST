@@ -4957,6 +4957,38 @@ extern "C" SK_EXPORT const SkModInfo* sporekit_mod_main(const SkHost* host, SkMo
                    },
                    nullptr, SK_CMD_ANY_THREAD);
     coop_register_debug_commands(H, M);
+    H->command_add(M, "coop.rivals",
+                   "coop.rivals [status | <cell|creature|tribe|civ|space> <together|rivals>] - host sets a stage mode",
+                   [](void*, int argc, const char* const* argv, SkOut* out) {
+                       if (g_sess.role() != net::Role::Host) {
+                           H->out_printf(out, "host only (create the session first)");
+                           return 1;
+                       }
+                       if (argc >= 3) {
+                           rivals::Stage stage;
+                           if (!rivals_parse_stage(argv[1], stage)) {
+                               H->out_printf(out, "unknown stage: %s", argv[1]);
+                               return 1;
+                           }
+                           rivals::StageMode mode;
+                           if (!strcmp(argv[2], "rivals")) mode = rivals::StageMode::Rivals;
+                           else if (!strcmp(argv[2], "together")) mode = rivals::StageMode::Together;
+                           else {
+                               H->out_printf(out, "mode must be together or rivals");
+                               return 1;
+                           }
+                           g_rivals_state.set_stage_mode(stage, mode);
+                           rivals_broadcast_state();
+                           g_lobby_dirty = true;
+                       }
+                       for (uint8_t i = 0; i < rivals::kStageCount; ++i) {
+                           auto stage = static_cast<rivals::Stage>(i);
+                           H->out_printf(out, "%s: %s", rivals_stage_name(stage),
+                               g_rivals_state.stage_mode(stage) == rivals::StageMode::Rivals ? "rivals" : "together");
+                       }
+                       return 0;
+                   },
+                   nullptr, SK_CMD_MAIN_THREAD);
     teamplay::Ctx tc;
     tc.partners = partners;
     tc.notice = [](const std::string& t) { notice(t, -1); };
