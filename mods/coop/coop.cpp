@@ -4477,6 +4477,20 @@ void init_ui()
             share_all();
     };
     a.vote_active = [] { return g_vote.active; };
+    a.stage_mode = [](int stage) {
+        if (stage < 0 || stage >= (int)rivals::kStageCount) return 0;
+        return g_rivals_state.stage_mode(static_cast<rivals::Stage>(stage)) == rivals::StageMode::Rivals ? 1 : 0;
+    };
+    a.can_edit_stage_modes = [] { return g_sess.role() == net::Role::Host && g_sess.connected(); };
+    a.toggle_stage_mode = [](int stage) {
+        if (g_sess.role() != net::Role::Host || stage < 0 || stage >= (int)rivals::kStageCount) return;
+        auto s = static_cast<rivals::Stage>(stage);
+        auto next = g_rivals_state.stage_mode(s) == rivals::StageMode::Rivals
+            ? rivals::StageMode::Together : rivals::StageMode::Rivals;
+        g_rivals_state.set_stage_mode(s, next);
+        rivals_broadcast_state();
+        g_lobby_dirty = true;
+    };
     a.say = [](const std::string& t) {
         if (support::chat_command(t)) // "/bug <text>" (docs/REPORTING.md#reporting-support)
             return;
