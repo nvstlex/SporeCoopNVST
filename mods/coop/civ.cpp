@@ -264,15 +264,14 @@ static bool attack_order_allowed(void* attacker, void* target, int order_type, s
         return true; // NPC / untracked attacker or target
 
     const bool city_target = order_type == 2;
-    const uint8_t to = city_target ? owner_of_city(target) : owner_of_vehicle(target);
-    if (to >= rivals::kMaxPlayers || to == from)
-        return true;
-
-    // The first native city in the player civilization's city vector is its capital.
+    // Protect the native capital even while its city is temporarily marked shared at session start.
     if (city_target && target == player_capital_city()) {
         if (reason) *reason = "the capital is protected";
         return false;
     }
+    const uint8_t to = city_target ? owner_of_city(target) : owner_of_vehicle(target);
+    if (to >= rivals::kMaxPlayers || to == from)
+        return true;
     if (!rivals::allows_player_attack(rivals::Stage::Civilization, from, to)) {
         if (reason) *reason = "players are not at war";
         return false;
