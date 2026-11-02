@@ -35,7 +35,8 @@ struct SessionState {
     {
         const auto s = static_cast<uint8_t>(stage);
         const auto m = static_cast<uint8_t>(mode);
-        if (s >= kStageCount || m > static_cast<uint8_t>(StageMode::Rivals))
+        if (s >= kStageCount || m > static_cast<uint8_t>(StageMode::Rivals) ||
+            (stage == Stage::Civilization && mode == StageMode::Rivals))
             return false;
         stage_modes[s] = mode;
         return true;
@@ -135,9 +136,9 @@ inline bool read_state(net::Reader& r, SessionState& out)
     SessionState next;
     for (uint8_t s = 0; s < kStageCount; ++s) {
         const uint8_t mode = r.u8();
-        if (mode > static_cast<uint8_t>(StageMode::Rivals))
+        if (mode > static_cast<uint8_t>(StageMode::Rivals) ||
+            !next.set_stage_mode(static_cast<Stage>(s), static_cast<StageMode>(mode)))
             return false;
-        next.stage_modes[s] = static_cast<StageMode>(mode);
     }
     for (uint8_t a = 0; a < kMaxPlayers; ++a) {
         for (uint8_t b = a + 1; b < kMaxPlayers; ++b) {
