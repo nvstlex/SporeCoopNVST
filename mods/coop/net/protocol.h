@@ -82,7 +82,6 @@ enum MsgType : uint8_t {
     MSG_DIAG = 60,        // support diagnostics (net/diagmsg.h): u8 kind, payload; session clock, bug
                           // marks, sync self-check. Older SporeCoop ignores it (an unknown type).
     MSG_RIVALS_STATE = 61, // host -> guests: versioned multi-stage mode and player relation table (rivals_state.h)
-    MSG_RIVALS_RES = 62,   // host -> guest: initial per-player Tribe/Civ Rivals resource balance
 };
 
 // LAN discovery: plain datagrams outside any connection, answered by hosts on their game port
