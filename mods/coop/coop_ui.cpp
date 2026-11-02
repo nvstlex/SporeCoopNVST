@@ -911,7 +911,11 @@ static void refresh_rivals()
 {
     const bool editable = A.can_edit_stage_modes && A.can_edit_stage_modes();
     for (int i = 0; i < 5; ++i) {
+        static const char* names_en[5] = {"Cell", "Creature", "Tribe", "Civilization", "Space"};
+        static const char* names_ru[5] = {"Клетка", "Существо", "Племя", "Цивилизация", "Космос"};
         const bool rivals = A.stage_mode && A.stage_mode(i) == 1;
+        text(D.rivals_stage[i], std::string(T(names_en[i], names_ru[i])) + "  —  " +
+             (rivals ? T("Rivals", "Соперники") : T("Together", "Вместе")));
         text(D.rivals_toggle[i], rivals ? T("Rivals", "Соперники") : T("Together", "Вместе"));
         color(D.rivals_toggle[i], rivals ? kYellow : kGreen);
         show(D.rivals_toggle[i], editable);
