@@ -907,6 +907,20 @@ static void refresh_lobby()
     text(D.leave_btn, host ? T("Stop hosting", "Закрыть игру") : T("Leave", "Выйти"));
 }
 
+static void refresh_rivals()
+{
+    const bool editable = A.can_edit_stage_modes && A.can_edit_stage_modes();
+    for (int i = 0; i < 5; ++i) {
+        const bool rivals = A.stage_mode && A.stage_mode(i) == 1;
+        text(D.rivals_toggle[i], rivals ? T("Rivals", "Соперники") : T("Together", "Вместе"));
+        color(D.rivals_toggle[i], rivals ? kYellow : kGreen);
+        show(D.rivals_toggle[i], editable);
+    }
+    text(D.rivals_title, editable
+        ? T("Choose a mode for every stage", "Выберите режим для каждого этапа")
+        : T("Only the host can change these settings", "Изменять настройки может только хост"));
+}
+
 static void refresh_space()
 {
     auto rows = spaceext::rows_all();
@@ -969,18 +983,24 @@ static void refresh()
     bool space = lobby && A.mode && A.mode() == modes::kSpace;
     if (!space)
         g_space_page = false;
+    if (!lobby)
+        g_rivals_page = false;
     for (Win w : D.page_connect)
         show(w, !lobby);
     for (Win w : D.page_lobby)
-        show(w, lobby && !g_space_page);
+        show(w, lobby && !g_space_page && !g_rivals_page);
+    for (Win w : D.page_rivals)
+        show(w, lobby && g_rivals_page);
     for (Win w : D.page_space)
         show(w, lobby && g_space_page);
-    show(D.space_btn, space && !g_space_page);
+    show(D.space_btn, space && !g_space_page && !g_rivals_page);
+    show(D.rivals_btn, lobby && !g_space_page && !g_rivals_page);
     if (!lobby || g_space_page) {
         show(D.chat_up, false);
         show(D.chat_down, false);
     }
     text(D.subtitle, lobby && g_space_page ? T("CO-OP: SPACE", "КООПЕРАТИВ: КОСМОС")
+                     : lobby && g_rivals_page ? T("CO-OP: STAGE MODES", "КООПЕРАТИВ: РЕЖИМЫ ЭТАПОВ")
                      : lobby ? T("CO-OP LOBBY", "ЛОББИ КООПЕРАТИВА") : T("CO-OP", "КООПЕРАТИВ"));
     if (A.version_line)
         text(D.version, A.version_line());
@@ -988,6 +1008,8 @@ static void refresh()
         A.lan_scan(!lobby);
     if (lobby && g_space_page)
         refresh_space();
+    else if (lobby && g_rivals_page)
+        refresh_rivals();
     else if (lobby)
         refresh_lobby();
     else
