@@ -4991,7 +4991,7 @@ extern "C" SK_EXPORT const SkModInfo* sporekit_mod_main(const SkHost* host, SkMo
                    nullptr, SK_CMD_ANY_THREAD);
     coop_register_debug_commands(H, M);
     H->command_add(M, "coop.rivals",
-                   "coop.rivals [status | <cell|creature|tribe|civ|space> <together|rivals>] - host sets a stage mode",
+                   "coop.rivals [status | players | <stage> <together|rivals> | relation <id> <id> <neutral|ally|war>] - host Rivals settings",
                    [](void*, int argc, const char* const* argv, SkOut* out) {
                        if (g_sess.role() != net::Role::Host) {
                            H->out_printf(out, "host only (create the session first)");
