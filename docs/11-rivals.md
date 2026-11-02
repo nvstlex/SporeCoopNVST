@@ -1,10 +1,22 @@
 # 11. Rivals: own bases in one world (design)
 
-Status: **design, not implemented** (decided with the project owner, 2026-10-25). Chapter 9 is
+Status: **design with an initial session-state implementation** (decided with the project owner, 2026-10-25; implementation work started 2026-11-03). Chapter 9 is
 the other session mode, "Together" (one team, one base). This chapter is the second mode,
 "Rivals": every player has a base, a species, a tribe, a nation and an empire of its own, all
 players live in the same world, everybody always sees where the others are, and every stage is a
 race. Players can be neutral, allies or at war with each other.
+
+## 11.0 Implementation status
+
+The first implementation slice is on the `nvst/rivals-foundation` branch:
+
+* `rivals_state.h` holds the five per-stage mode choices and a symmetric four-player relation table.
+* `MSG_RIVALS_STATE` carries a versioned, fixed-size snapshot. The host is authoritative; guests accept only snapshots from player 0, and malformed snapshots are rejected without partially changing live state.
+* The host sends the complete snapshot when a player joins. The co-op lobby has a Stage modes page; only the host can edit it.
+* `coop.rivals` can inspect and change stage modes, list player IDs, and set a pair's generic relation state from the console.
+* When the Space stage is already active, changing its mode routes through the existing Space Rivals transition so its established money split/merge code is used.
+
+This is **not yet the complete Rivals gameplay**. The settings table is session-only and is not yet persisted in save files. Independent faction ownership, separate DNA/food/money ledgers outside the existing Space implementation, NPC diplomacy per player, stage-specific combat/capture rules, spawn-site allocation, catch-up timers and draft rewards remain to be implemented. The generic relation table is currently session data; outside Space it does not yet alter game AI or combat.
 
 ## 11.1 Decisions
 
