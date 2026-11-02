@@ -21,6 +21,7 @@
 #include "net/validate.h"
 #include "sporekit_game.hpp"
 #include "fixes.h"
+#include "rivals_state.h"
 
 using skg::thiscall;
 using skg::vcall;
@@ -221,6 +222,14 @@ static uint16_t g_rx_cycle = 0xFFFF;
 static uint32_t g_spawned, g_removed, g_cmds_sent;
 static std::vector<void*> g_local_tribe_of; // host tribe index -> local tribe
 
+static bool player_attack_allowed(uint8_t attacker, uint8_t target)
+{
+    if (rivals::current_stage_mode(rivals::Stage::Tribe) != rivals::StageMode::Rivals)
+        return true;
+    return attacker < rivals::kMaxPlayers && target < rivals::kMaxPlayers && attacker != target &&
+           rivals::current_relation(attacker, target) == rivals::Relation::War;
+}
+
 uint8_t owner_of(void* c)
 {
     if (C.sess && C.sess->role() == net::Role::Host) {
@@ -345,11 +354,39 @@ static int SK_THISCALL h_DoActionForObjects(void* self, void* vec, int action, v
     }
     if (!is_guest() || game::mode_id() != modes::kTribe) {
         if (is_host() && game::mode_id() == modes::kTribe) {
-            char lb[96];
+            char lb[128];
             snprintf(lb, sizeof lb, "action=%d n=%d obj=%p noun=%X", action,
                      vec ? (int)(F<void**>(vec, 4) - F<void**>(vec, 0)) : -1, target, target ? game::noun_id(target) : 0);
             g_last_local = lb;
             g_local_orders++;
+            // In Tribe Rivals, player-vs-player attacks require an explicit War relation.
+            // Keep the game's original order path for NPCs and all non-attack actions.
+            if (action == 7 && is_citizen(target)) {
+                const uint8_t victim = owner_of(target);
+                if (victim < rivals::kMaxPlayers) {
+                    std::vector<void*> allowed;
+                    void** begin = vec ? F<void**>(vec, 0) : nullptr;
+                    void** end = vec ? F<void**>(vec, 4) : nullptr;
+                    unsigned blocked = 0;
+                    for (void** it = begin; it && it < end; ++it) {
+                        void* spatial = *it;
+                        void* attacker = spatial ? (uint8_t*)spatial - 0xC0 : nullptr;
+                        const uint8_t owner = attacker && is_citizen(attacker) ? owner_of(attacker) : 0xFF;
+                        if (owner < rivals::kMaxPlayers && !player_attack_allowed(owner, victim)) {
+                            ++blocked;
+                            continue;
+                        }
+                        allowed.push_back(spatial);
+                    }
+                    if (blocked) {
+                        g_last_local += " blocked=" + std::to_string(blocked) + " (not at war)";
+                        if (allowed.empty())
+                            return 1;
+                        void* filtered[3] = {allowed.data(), allowed.data() + allowed.size(), allowed.data() + allowed.size()};
+                        return o_DoActionForObjects(self, filtered, action, target, prop);
+                    }
+                }
+            }
         }
         return o_DoActionForObjects(self, vec, action, target, prop);
     }
@@ -671,6 +708,14 @@ static void host_command(uint8_t from, net::Reader& r)
             !game::object_alive(c)) {
             g_cmds_rejected++;
             continue;
+        }
+        if (kind == CMD_ACTION && action == 7 && is_citizen(target)) {
+            const uint8_t victim = owner_of(target);
+            if (victim < rivals::kMaxPlayers && !player_attack_allowed(from, victim)) {
+                g_cmds_rejected++;
+                g_last_cmd += " rejected: target player is not at war";
+                continue;
+            }
         }
         if (kind == CMD_WALK) {
             void* rec = thiscall<void*>(a_DoAction, c, 4, (void*)nullptr, (void*)nullptr);
