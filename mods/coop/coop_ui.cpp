@@ -913,7 +913,7 @@ static void refresh_rivals()
     for (int i = 0; i < 5; ++i) {
         static const char* names_en[5] = {"Cell", "Creature", "Tribe", "Civilization", "Space"};
         static const char* names_ru[5] = {"Клетка", "Существо", "Племя", "Цивилизация", "Космос"};
-        const bool cooperative_only = i == (int)rivals::Stage::Civilization;
+        const bool cooperative_only = i == 3; // Civilization is co-op only.
         const bool rivals = A.stage_mode && A.stage_mode(i) == 1;
         const char* mode = cooperative_only ? T("Co-op only", "Только кооператив")
                                              : (rivals ? T("Rivals", "Соперники") : T("Together", "Вместе"));
