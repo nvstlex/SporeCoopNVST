@@ -86,7 +86,27 @@ neutral/ally rejection, War acceptance in both directions, and that NPC attacks 
 mode are unchanged. This hook does not create separate native tribes and does not yet change
 NPC AI or NPC diplomacy.
 
-## 4. Safe implementation order
+## 4. Civilization combat relation hook and inventory diagnostic
+
+The shared relation table is now consumed by Civilization attack orders. The RE notes in
+`docs/re/civ.md` identify native order type 1 as an attack on a target and type 2 as a
+military city attack. In Civilization Rivals, a tracked player vehicle may use these orders
+against another player's tracked vehicle or city only when the pair is at war. Neutral and
+allied pairs are blocked. The first city in the native player civilization's city vector is
+treated as the capital and is protected even during war. The host checks its own orders and
+revalidates guest orders before applying them. NPC/untracked attackers and Together mode keep
+the original game path.
+
+The read-only `coop.civ factions` diagnostic lists native civilization pointers, political IDs,
+the player-owned flag, wealth, city and vehicle vector counts, and culture-set pointers. Run it
+in the same disposable Civilization world on host and guest. Pointers are process-local; compare
+political IDs and counts rather than pointer values across processes.
+
+Runtime verification still needs two players: check neutral/ally rejection, War acceptance for
+non-capital cities and vehicles, capital protection during war, and unchanged NPC/Together
+behaviour. This does not create separate native civilizations or separate AI/economies.
+
+## 5. Safe implementation order
 
 Do not switch the lobby to offer a stage as fully playable Rivals until its native faction
 prototype survives a two-process test.
@@ -108,8 +128,8 @@ prototype survives a two-process test.
 
 ### Civilization prototype
 
-1. Inventory `GetAllCivilizations`: political ID, player-owned flag, wealth, city count,
-   vehicle count and culture-set pointer.
+1. Use the read-only `coop.civ factions` inventory on host and guest to compare native
+   political IDs, player-owned flags, wealth, city counts, vehicle counts and culture-set pointers.
 2. Find the game's native civilization creation/registration path and determine how a new
    political ID is allocated. Do not fabricate a political ID.
 3. In a disposable world, create/register a second civilization with no cities and verify that
@@ -119,12 +139,12 @@ prototype survives a two-process test.
 5. Verify how each guest's `GetPlayerCivilization` can point to its own nation. If this is not
    supported, do not advertise independent civilization gameplay.
 
-## 5. Current blockers and non-goals
+## 6. Current blockers and non-goals
 
 * The current branch's per-player Tribe food and Civilization money are local-copy balances, not
   balances stored on independent native factions.
-* The generic player relation matrix is session state only. Tribe player-vs-player attacks now
-  require War, but NPC AI, NPC diplomacy and city capture do not yet consult it.
+* The generic player relation matrix is session state only. Tribe and Civilization attack-order
+  hooks consult it, but NPC AI, NPC diplomacy, non-order damage and full native city capture do not.
 * The current city/member owner maps are still useful infrastructure and should be retained;
   they provide network identity, command validation and overlays after native faction ownership
   is introduced.
@@ -133,7 +153,7 @@ prototype survives a two-process test.
 * Keep the current Together behaviour unchanged. Rivals-specific hooks must be gated by the
   selected stage mode and have a safe fallback when the prototype is unavailable.
 
-## 6. Decision
+## 7. Decision
 
 The next code milestone is **a diagnostic and disposable native-faction prototype**, not a
 premature implementation of the full stage. Tribe is the first candidate because the mod already
