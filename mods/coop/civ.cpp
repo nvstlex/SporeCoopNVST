@@ -2435,6 +2435,30 @@ std::string debug(const std::vector<std::string>& a)
         snprintf(b, sizeof b, "ai spawns blocked %u\n", g_ai_spawns_blocked);
         return out + b;
     }
+    if (!a.empty() && a[0] == "factions") { // read-only inventory of native civilizations (Rivals research)
+        if (game::mode_id() != modes::kCiv || !nm())
+            return "enter Civilization stage first";
+        const auto me_civ = player_civ();
+        const auto civs = vec_of(thiscall<void*>(a_GetAllCivs, nm()));
+        std::string out;
+        char line[256];
+        for (size_t i = 0; i < civs.size() && i < 100; ++i) {
+            void* civ = civs[i];
+            if (!civ || !game::object_alive(civ) || !skg::readable(civ, 0xD8))
+                continue;
+            const auto pol = pol_of(civ);
+            const auto cities = vec_of((uint8_t*)civ + 0x9C);
+            const auto vehicles = vec_of((uint8_t*)civ + 0xB0);
+            const auto money = thiscall<float>(a_GetMoney, civ);
+            const auto culture = F<void*>(civ, 0x6C);
+            snprintf(line, sizeof line,
+                     "civ %zu %p pol=%08X%s player_flag=%u money=%.1f cities=%u vehicles=%u culture=%p\\n",
+                     i, civ, pol, civ == me_civ ? " PLAYER" : "", (unsigned)F<uint8_t>(civ, 0x89),
+                     money, (unsigned)cities.size(), (unsigned)vehicles.size(), culture);
+            out += line;
+        }
+        return out.empty() ? "no readable civilizations\\n" : out;
+    }
     if (!a.empty() && a[0] == "tables") { // sizes of the pointer tables (tests: BUG-0040, BUG-0059)
         char b[320];
         snprintf(b, sizeof b,
