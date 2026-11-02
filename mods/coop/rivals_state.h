@@ -73,6 +73,13 @@ struct SessionState {
     }
 };
 
+// Civilization's current adapter is cooperative city ownership inside one native nation.
+// Even if an old/malformed session snapshot contains Rivals for this stage, expose Together.
+inline StageMode effective_stage_mode(const SessionState& state, Stage stage)
+{
+    return stage == Stage::Civilization ? StageMode::Together : state.stage_mode(stage);
+}
+
 // Player-vs-player combat is permitted only for an explicit War relation.
 // NPCs / unassigned owners are handled by the game rules, not this policy.
 inline bool allows_player_attack(const SessionState& state, uint8_t attacker, uint8_t target)
