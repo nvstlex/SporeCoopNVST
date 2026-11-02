@@ -73,6 +73,9 @@ struct SessionState {
     }
 };
 
+// Implemented by coop.cpp: the authoritative table shared with stage modules.
+StageMode current_stage_mode(Stage stage);
+
 // Fixed-size wire format: version, five stage modes, then the six unordered player pairs.
 // Decode into a temporary so malformed packets never partially mutate live session state.
 inline void write_state(net::Writer& w, const SessionState& state)
