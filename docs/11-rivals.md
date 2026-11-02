@@ -13,6 +13,7 @@ The first implementation slice is on the `nvst/rivals-foundation` branch:
 * `rivals_state.h` holds the five per-stage mode choices and a symmetric four-player relation table.
 * `MSG_RIVALS_STATE` carries a versioned, fixed-size snapshot. The host is authoritative; guests accept only snapshots from player 0, and malformed snapshots are rejected without partially changing live state.
 * The host sends the complete snapshot when a player joins. The co-op lobby has a Stage modes page; only the host can edit it.
+* Civilization is hard-locked to Together in the effective stage policy and state validator; the lobby and incoming snapshots cannot enable player-vs-player Civilization mode.
 * `coop.rivals` can inspect and change stage modes, list player IDs, and set a pair's generic relation state from the console.
 * When the Space stage is already active, changing its mode routes through the existing Space Rivals transition so its established money split/merge code is used.
 * Unlike the other stage settings, Space Rivals can only be switched while the Space stage is active; it reuses the existing in-game economy transition.
@@ -126,7 +127,7 @@ the stage ends, and what the others see.
 Civilization is a shared-team stage, including when other stages use Rivals rules.
 
 * All players belong to the same native Spore civilization and cooperate against NPC nations.
-* Up to four connected players can each control a city through the existing city-owner overlay. The capital is temporarily shared if there are fewer cities than players; once enough cities exist, the capital is assigned to the host and the remaining cities are distributed to the other players.
+* Up to four connected players can each control a city through the existing city-owner overlay as cities become available. There is no artificial city spawn at match start: the initial capital is temporarily shared if there are fewer cities than players, and additional cities are assigned through captures/ownership. Once enough player cities exist, the capital is assigned to the host and the remaining initial cities are distributed to the other players.
 * A vehicle inherits the owner of the city that built it. Players can select and command their own vehicles; guests send orders to the host, which remains authoritative for simulation.
 * Players can build, buy vehicles and manage buildings in their own cities. The treasury remains shared, as in the existing co-op economy.
 * Every player can attack NPC cities and vehicles. Player-owned cities and vehicles are teammates: there is no player-vs-player war, no friendly-fire diplomacy gate and no capital-protection rule between co-op partners.
