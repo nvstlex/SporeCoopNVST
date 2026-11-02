@@ -20,6 +20,21 @@ static void test_stage_modes()
     CHECK(!s.set_stage_mode(rivals::Stage::Tribe, static_cast<rivals::StageMode>(99)));
 }
 
+static void test_coop_city_assignment()
+{
+    const std::vector<uint8_t> players{0, 1, 2, 3};
+    CHECK(rivals::initial_city_owner(0, 1, players) == rivals::kSharedCityOwner);
+    CHECK(rivals::initial_city_owner(0, 2, players) == rivals::kSharedCityOwner);
+    CHECK(rivals::initial_city_owner(1, 2, players) == 1);
+    CHECK(rivals::initial_city_owner(0, 4, players) == 0);
+    CHECK(rivals::initial_city_owner(1, 4, players) == 1);
+    CHECK(rivals::initial_city_owner(2, 4, players) == 2);
+    CHECK(rivals::initial_city_owner(3, 4, players) == 3);
+    CHECK(rivals::initial_city_owner(4, 5, players) == 0); // extra cities cycle back to host
+    CHECK(rivals::initial_city_owner(0, 4, {}) == 0xFF);
+    CHECK(rivals::initial_city_owner(4, 4, players) == 0xFF);
+}
+
 static void test_relations()
 {
     rivals::SessionState s;
@@ -137,6 +152,7 @@ static void test_wire_roundtrip_and_validation()
 int main()
 {
     test_stage_modes();
+    test_coop_city_assignment();
     test_relations();
     test_player_combat_policy();
     test_rivals_balance_merge_ledger();
