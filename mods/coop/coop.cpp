@@ -165,8 +165,13 @@ static bool rivals_apply_stage_mode(rivals::Stage stage, rivals::StageMode mode,
         err = "host only";
         return false;
     }
-    // Reuse Space mode money splitting/merging when its world is already active.
-    if (stage == rivals::Stage::Space && game::mode_id() == modes::kSpace &&
+    // Space has its own game-side transition and money split/merge. Do not let the lobby
+    // record a future Space setting that the game cannot apply yet.
+    if (stage == rivals::Stage::Space && game::mode_id() != modes::kSpace) {
+        err = "Space Rivals can only be switched while the Space stage is active";
+        return false;
+    }
+    if (stage == rivals::Stage::Space &&
         spaceext::rivals() != (mode == rivals::StageMode::Rivals)) {
         err = rivalry::set_enabled(mode == rivals::StageMode::Rivals);
         if (!err.empty()) return false;
