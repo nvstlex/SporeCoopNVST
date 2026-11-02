@@ -106,7 +106,7 @@ inline bool allows_player_attack(const SessionState& state, uint8_t attacker, ui
 
 inline bool allows_player_attack(const SessionState& state, Stage stage, uint8_t attacker, uint8_t target)
 {
-    return state.stage_mode(stage) != StageMode::Rivals || allows_player_attack(state, attacker, target);
+    return effective_stage_mode(state, stage) != StageMode::Rivals || allows_player_attack(state, attacker, target);
 }
 
 // Implemented by coop.cpp: the authoritative table shared with stage modules.
