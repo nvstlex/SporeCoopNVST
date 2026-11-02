@@ -18,6 +18,8 @@
 #include <thread>
 #include <csignal>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <deque>
 #include <map>
 #include <string>
@@ -153,6 +155,8 @@ static bool rivals_parse_stage(const char* text, rivals::Stage& out)
     else return false;
     return true;
 }
+extern bool g_lobby_dirty; // defined with the lobby state below
+
 static bool rivals_apply_stage_mode(rivals::Stage stage, rivals::StageMode mode, std::string& err)
 {
     if (g_sess.role() != net::Role::Host || !g_sess.connected()) {
