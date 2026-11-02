@@ -86,6 +86,33 @@ neutral/ally rejection, War acceptance in both directions, and that NPC attacks 
 mode are unchanged. This hook does not create separate native tribes and does not yet change
 NPC AI or NPC diplomacy.
 
+## 5. Space stage: existing Rivals system
+
+Space is not an empty stage. `space_rivalry.cpp` already implements a dedicated multiplayer
+Rivals system:
+
+- the host switches Allies/Rivals only while the players are in Space;
+- entering Rivals splits the current shared empire money across players, while returning to
+  Allies merges the last reported budgets and reconciles each player's unreported delta;
+- a guest who rejoins or reloads asks the host to restore its last budget by player name;
+- alliances and peace require proposals/acceptance; war is declared directly;
+- the host stores relations by player-name pairs so a reconnect with a changed network ID can
+  recover them;
+- hostile ship puppets receive a neutral political ID so weapons can hit them; damage is routed
+  to the owning player's real ship and applied there. Neutral/allied puppets retain the local
+  empire political ID and are protected by the game's friendly-fire rules.
+
+This system deliberately remains separate from the generic cross-stage relation table: it has
+its own name-based persistence, budget protocol, Space UI and damage-routing path. The general
+lobby currently allows a Space mode switch only while Space is active, because that transition
+must execute the Space-specific money split/merge. A future-stage Space selection and one
+unified relation API require a separate integration pass; do not replace the existing Space
+protocol with the generic matrix without preserving reconnect restoration and damage routing.
+
+Runtime verification should cover two players through split, income/spending, alliance, war,
+ship damage, peace, merge and reconnect/reload budget restoration. Existing debug entry point:
+`coop.space rivalry` (status, mode, ally, accept, war, peace, and diagnostic counters).
+
 ## 4. Civilization combat relation hook and inventory diagnostic
 
 The shared relation table is now consumed by Civilization attack orders. The RE notes in
@@ -106,7 +133,7 @@ Runtime verification still needs two players: check neutral/ally rejection, War 
 non-capital cities and vehicles, capital protection during war, and unchanged NPC/Together
 behaviour. This does not create separate native civilizations or separate AI/economies.
 
-## 5. Safe implementation order
+## 6. Safe implementation order
 
 Do not switch the lobby to offer a stage as fully playable Rivals until its native faction
 prototype survives a two-process test.
@@ -139,7 +166,7 @@ prototype survives a two-process test.
 5. Verify how each guest's `GetPlayerCivilization` can point to its own nation. If this is not
    supported, do not advertise independent civilization gameplay.
 
-## 6. Current blockers and non-goals
+## 7. Current blockers and non-goals
 
 * The current branch's per-player Tribe food and Civilization money are local-copy balances, not
   balances stored on independent native factions.
@@ -153,7 +180,7 @@ prototype survives a two-process test.
 * Keep the current Together behaviour unchanged. Rivals-specific hooks must be gated by the
   selected stage mode and have a safe fallback when the prototype is unavailable.
 
-## 7. Decision
+## 8. Decision
 
 The next code milestone is **a diagnostic and disposable native-faction prototype**, not a
 premature implementation of the full stage. Tribe is the first candidate because the mod already
