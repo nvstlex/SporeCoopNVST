@@ -2718,7 +2718,7 @@ std::string debug(const std::vector<std::string>& a)
         }
         return out;
     }
-    return "usage: coop.civ select <id> <0|1> | move <id> <x> <y> <z> | buy <city> <0 land|1 water|2 air> | "
+    return "usage: coop.civ factions | select <id> <0|1> | move <id> <x> <y> <z> | buy <city> <0 land|1 water|2 air> | "
            "build <city> <house|factory|fun> | slots <city>";
 }
 
