@@ -32,6 +32,21 @@ static void test_relations()
     CHECK(s.get_relation(2, 0) == rivals::Relation::Neutral);
 }
 
+static void test_player_combat_policy()
+{
+    rivals::SessionState s;
+    CHECK(!rivals::allows_player_attack(s, 0, 1)); // neutral is not war
+    CHECK(s.set_relation(0, 1, rivals::Relation::Ally));
+    CHECK(!rivals::allows_player_attack(s, 0, 1));
+    CHECK(!rivals::allows_player_attack(s, 1, 0)); // symmetric relation
+    CHECK(s.set_relation(0, 1, rivals::Relation::War));
+    CHECK(rivals::allows_player_attack(s, 0, 1));
+    CHECK(rivals::allows_player_attack(s, 1, 0));
+    CHECK(!rivals::allows_player_attack(s, 0, 0));
+    CHECK(!rivals::allows_player_attack(s, 0, 4));
+    CHECK(!rivals::allows_player_attack(s, 4, 0));
+}
+
 static void test_rivals_balance_merge_ledger()
 {
     // A guest's local Tribe/Civ balance is sent once as a contribution to the host total.
@@ -106,6 +121,7 @@ int main()
 {
     test_stage_modes();
     test_relations();
+    test_player_combat_policy();
     test_rivals_balance_merge_ledger();
     test_wire_roundtrip_and_validation();
     std::printf("rivals_tests: %s (%d failures)\n", failures ? "FAILED" : "ok", failures);
