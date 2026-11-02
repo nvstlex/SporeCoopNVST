@@ -234,10 +234,28 @@ void tick(net::Session& s, uint32_t mode, double now, bool elsewhere)
     for (auto& r : g_res) {
         double v;
         if (own_budget(r)) {
+            if (r.mode != modes::kSpace && r.mode == mode && r.get(v)) {
+                if (!r.own_budget_last && s.role() == net::Role::Host) {
+                    // Split the shared starting balance evenly when this stage enters Rivals.
+                    // The host keeps any remainder; every guest receives its own initial budget.
+                    const auto players = s.players();
+                    const size_t count = std::max<size_t>(1, players.size());
+                    const double guest_share = v / count;
+                    const double host_share = v - guest_share * (count - 1);
+                    r.set(host_share);
+                    r.synced = host_share;
+                    for (const auto& player : players) {
+                        if (player.id == 0) continue;
+                        net::Writer w;
+                        w.u8(r.id);
+                        w.f64(guest_share);
+                        s.send_reliable_to(player.id, net::MSG_RIVALS_RES, w);
+                    }
+                }
+                r.own_budget_last = true;
+            }
             r.have = false;
             r.led.reset();
-            if (r.mode != modes::kSpace)
-                r.own_budget_last = true;
             continue;
         }
         if (r.mode != mode || !r.get(v)) {
