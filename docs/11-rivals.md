@@ -18,11 +18,11 @@ The first implementation slice is on the `nvst/rivals-foundation` branch:
 * Unlike the other stage settings, Space Rivals can only be switched while the Space stage is active; it reuses the existing in-game economy transition.
 * Tribe food and Civilization money stop using the shared host total in their Rivals stages. Each running game copy keeps its local balance; when the host switches that stage back to Together, each guest sends its balance once and it is merged into the host total using the existing acknowledged resource ledger.
 * Tribe-stage player attacks (CitizenAction 7) now consult the shared relation table when Tribe is in Rivals mode: attacks against another player's members are accepted only when the pair is explicitly at war. Neutral and allied players cannot attack one another. The host enforces this for guest orders and filters the host's local selection before calling the game's original action path. This is an order filter, not proof of working PvP damage: every member still points to the same native `cTribe`, so the game's own combat/AI may still treat them as one tribe. NPC targets and Together mode keep the original game behaviour.
-* Civilization-stage vehicle attack orders (native order types 1 and 2) now consult the shared relation table in Rivals mode: attacks against another player's tracked vehicles or cities require War. Neutral and allied players cannot attack each other. The native player capital is protected even during war. This is an order filter, not yet independent nation combat: player vehicles and cities still share one native political ID, so the game may ignore damage/capture even when a War order is passed through. NPC orders and Together mode retain the original game behaviour.
+* Civilization is explicitly cooperative, not a player-vs-player Rivals stage. Up to four connected players share one native nation and fight NPC civilizations together. The host assigns ownership overlays to the native nation's cities: the capital is shared while there are fewer cities than players; as cities become available, the capital belongs to the host and the other cities are assigned to players in roster order. Vehicles inherit the owner of the city that produced them. Guests can command only their own vehicles and operate their own cities, while NPC attack orders are never blocked by player diplomacy. The shared treasury, host-authoritative city/vehicle simulation, city snapshots, building replication and joint siege bonuses remain the existing co-op implementation.
 * `coop.civ factions` is a read-only inventory of native civilizations: political ID, player flag, wealth, city/vehicle counts and culture-set pointer.
 * Space already has a separate, more complete Rivals implementation: host-authoritative mode changes, per-player budget splitting and merging, rejoin budget restoration by player name, alliance/peace proposals, war declarations, and ship-to-ship damage routed to the owning player. It still uses its own relation and money state rather than the generic cross-stage table; the lobby can switch Space only while the Space stage is active.
 
-This is **not yet the complete Rivals gameplay**. The settings table is session-only and is not yet persisted in save files. Tribe/Civ balances are local to each running game copy during Rivals; a late joiner currently starts from the host world copy rather than a saved private balance, and balances are not written to faction-specific save data. Independent faction ownership, separate DNA and Creature-stage progression, per-player NPC diplomacy, stage-specific combat/capture rules, spawn-site allocation, catch-up timers and draft rewards remain to be implemented. The generic relation table is session data. Tribe and Civilization player attack orders now require War, with the Civilization capital protected. Tribe AI, NPC diplomacy, non-order combat damage, building-level ownership and the other stages are not yet fully wired to the shared relation table. Space already has its own mature diplomacy and PvP path, but it remains separate from the generic cross-stage relation table and cannot yet be preconfigured for a future Space stage from the lobby.
+This is **not yet the complete Rivals gameplay**. The settings table is session-only and is not yet persisted in save files. Tribe/Civ balances are local to each running game copy during Rivals; a late joiner currently starts from the host world copy rather than a saved private balance, and balances are not written to faction-specific save data. Independent faction ownership, separate DNA and Creature-stage progression, per-player NPC diplomacy, stage-specific combat/capture rules, spawn-site allocation, catch-up timers and draft rewards remain to be implemented. The generic relation table is session data. Tribe player attack orders still consult War when Tribe Rivals is selected. Civilization is deliberately forced to Together because its intended gameplay is cooperative: separate player-vs-player nations, diplomacy and war are not part of the Civilization co-op requirement. Space already has its own mature diplomacy and PvP path, but it remains separate from the generic cross-stage relation table and cannot yet be preconfigured for a future Space stage from the lobby.
 
 ## 11.0.1 Native faction research
 
@@ -121,21 +121,19 @@ the stage ends, and what the others see.
 * Seen: the rival's members and chief with its colour and name, its village on the map, an edge
   arrow to its chief; the Race page: food, members, tribes allied / conquered.
 
-### 11.3.4 Civilization - "Rival nations"
-* **Own nation**: the host's nation is the host's; for every other player an NPC nation is taken
-  over (its capital at the base distance).
-* Own money, own vehicles, own cities (bought, captured, converted).
-* Every NPC nation has its own relation with each player.
-* Influence: "Turn <nation> against <rival>", "Protect my treaty with <nation>"; earned by trade
-  routes and missions, bought with money at a rising price.
-* War: vehicles can attack the rival's vehicles and cities; ordinary cities can be captured
-  (they change owner). The capital cannot be captured or converted. Superweapons cannot target the
-  rival's capital.
-* Alliance: money and spice can be given or sold; trade routes between allied players pay both.
-* End: the first to own more than half of the NPC cities wins; when no NPC city is left free, the
-  one with the most cities wins.
-* Seen: the rival's cities and vehicles in its colour with its name, its capital on the map; the
-  Race page: money, cities, vehicles, NPC nations allied.
+### 11.3.4 Civilization - "Co-op cities"
+
+Civilization is a shared-team stage, including when other stages use Rivals rules.
+
+* All players belong to the same native Spore civilization and cooperate against NPC nations.
+* Up to four connected players can each control a city through the existing city-owner overlay. The capital is temporarily shared if there are fewer cities than players; once enough cities exist, the capital is assigned to the host and the remaining cities are distributed to the other players.
+* A vehicle inherits the owner of the city that built it. Players can select and command their own vehicles; guests send orders to the host, which remains authoritative for simulation.
+* Players can build, buy vehicles and manage buildings in their own cities. The treasury remains shared, as in the existing co-op economy.
+* Every player can attack NPC cities and vehicles. Player-owned cities and vehicles are teammates: there is no player-vs-player war, no friendly-fire diplomacy gate and no capital-protection rule between co-op partners.
+* Joint sieges already reward cooperation: vehicles from two or more players attacking the same NPC city within the shared window increase capture damage.
+* Captured cities are assigned to the player whose vehicles are closest; the city ownership overlay and vehicle ownership are synchronized to guests.
+
+This stage does not need separate native cCivilization objects or separate political IDs. The current design is one nation with multiple player-owned city/vehicle control groups, not four rival nations.
 
 ### 11.3.5 Space - "Rival empires"
 * The **host's nation keeps the home planet**. Every other player's nation emigrates: in its game
