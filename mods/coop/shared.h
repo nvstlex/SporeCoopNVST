@@ -18,7 +18,7 @@ void init(const SkHost* host, SkMod* mod);
 void tick(net::Session& s, uint32_t mode, double now, bool elsewhere = false);
 void on_message(net::Session& s, uint8_t type, uint8_t from, net::Reader& r);
 void on_session_change(); // new session: resend totals
-void on_player_join(net::Role role); // a player joined: the host resends its totals (BUG-0220)
+void on_player_join(net::Session& s, net::Role role, uint8_t id); // join: totals plus a zeroed Rivals balance for a late guest
 void on_session_end();    // the sync state ends with the session (BUG-0049)
 void on_player_leave(uint8_t id);
 std::string fix(const std::string& name, int on); // coop.res fix reset|floor [0|1] (tests)
