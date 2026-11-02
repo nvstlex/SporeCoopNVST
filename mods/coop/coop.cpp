@@ -3114,7 +3114,7 @@ void setup_callbacks()
         support::on_player_join(p);
         if (g_sess.role() == net::Role::Host)
             rivals_broadcast_state(); // full settings snapshot for the newcomer
-        shared::on_player_join(g_sess.role());
+        shared::on_player_join(g_sess, g_sess.role(), p.id);
         creations::on_player_join(p.id);
         npc::on_player_leave(p.id); // a newcomer under a reused id knows no NPCs yet (BUG-0125)
         g_dna_sent = -1; // resend the DNA total to the newcomer
