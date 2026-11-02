@@ -71,6 +71,7 @@
 #include "diag_coop.h"
 #include "trace.h"
 #include "view_centres.h"
+#include "rivals_state.h"
 
 static const SkHost* H;
 static SkMod* M;
@@ -115,7 +116,41 @@ struct Remote {
 };
 
 net::Session g_sess;
+rivals::SessionState g_rivals_state;
 std::map<uint8_t, Remote> g_remotes;
+
+// Host-authoritative settings for the five stage modes. Save persistence and faction ownership
+// are deliberately separate follow-up steps; this table currently lives for the session.
+static void rivals_broadcast_state()
+{
+    if (g_sess.role() != net::Role::Host || !g_sess.connected()) return;
+    net::Writer w;
+    rivals::write_state(w, g_rivals_state);
+    g_sess.broadcast_reliable(net::MSG_RIVALS_STATE, w);
+}
+
+static const char* rivals_stage_name(rivals::Stage stage)
+{
+    switch (stage) {
+    case rivals::Stage::Cell: return "cell";
+    case rivals::Stage::Creature: return "creature";
+    case rivals::Stage::Tribe: return "tribe";
+    case rivals::Stage::Civilization: return "civ";
+    case rivals::Stage::Space: return "space";
+    }
+    return "unknown";
+}
+
+static bool rivals_parse_stage(const char* text, rivals::Stage& out)
+{
+    if (!strcmp(text, "cell")) out = rivals::Stage::Cell;
+    else if (!strcmp(text, "creature")) out = rivals::Stage::Creature;
+    else if (!strcmp(text, "tribe")) out = rivals::Stage::Tribe;
+    else if (!strcmp(text, "civ") || !strcmp(text, "civilization")) out = rivals::Stage::Civilization;
+    else if (!strcmp(text, "space")) out = rivals::Stage::Space;
+    else return false;
+    return true;
+}
 std::string g_name = "Player";
 double g_last_send = 0;
 void* g_last_avatar = nullptr;
