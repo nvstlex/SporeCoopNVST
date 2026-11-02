@@ -2,6 +2,7 @@
 #include <cstdio>
 
 #include "rivals_state.h"
+#include "net/shared_ledger.h"
 
 static int failures = 0;
 #define CHECK(x) do { if (!(x)) { std::printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #x); ++failures; } } while (0)
@@ -29,6 +30,28 @@ static void test_relations()
     s.clear_player(2);
     CHECK(s.get_relation(0, 2) == rivals::Relation::Neutral);
     CHECK(s.get_relation(2, 0) == rivals::Relation::Neutral);
+}
+
+static void test_rivals_balance_merge_ledger()
+{
+    // A guest's local Tribe/Civ balance is sent once as a contribution to the host total.
+    net::SharedLedger guest;
+    const double local_balance = 73.5;
+    guest.pending = local_balance;
+    const uint32_t seq = guest.send();
+    CHECK(seq == 1);
+    CHECK(guest.pending == 0);
+    CHECK(guest.in_flight.size() == 1);
+
+    const double host_before = 120.0;
+    const double host_after = net::shared_add(host_before, guest.in_flight[0].v, true);
+    CHECK(host_after == 193.5);
+
+    // The host echoes the sequence in MSG_RES. The guest drops the in-flight contribution
+    // after seeing that acknowledgement and does not add it again on the next total.
+    CHECK(guest.shown(host_after, true, seq) == host_after);
+    CHECK(guest.in_flight.empty());
+    CHECK(guest.shown(host_after, true, seq) == host_after);
 }
 
 static void test_wire_roundtrip_and_validation()
@@ -82,6 +105,7 @@ int main()
 {
     test_stage_modes();
     test_relations();
+    test_rivals_balance_merge_ledger();
     test_wire_roundtrip_and_validation();
     std::printf("rivals_tests: %s (%d failures)\n", failures ? "FAILED" : "ok", failures);
     return failures ? 1 : 0;
