@@ -13,6 +13,9 @@ static void test_stage_modes()
     CHECK(s.stage_mode(rivals::Stage::Cell) == rivals::StageMode::Together);
     CHECK(s.set_stage_mode(rivals::Stage::Tribe, rivals::StageMode::Rivals));
     CHECK(s.stage_mode(rivals::Stage::Tribe) == rivals::StageMode::Rivals);
+    CHECK(rivals::effective_stage_mode(s, rivals::Stage::Tribe) == rivals::StageMode::Rivals);
+    CHECK(s.set_stage_mode(rivals::Stage::Civilization, rivals::StageMode::Rivals));
+    CHECK(rivals::effective_stage_mode(s, rivals::Stage::Civilization) == rivals::StageMode::Together);
     CHECK(!s.set_stage_mode(static_cast<rivals::Stage>(99), rivals::StageMode::Rivals));
     CHECK(!s.set_stage_mode(rivals::Stage::Tribe, static_cast<rivals::StageMode>(99)));
 }
