@@ -4805,6 +4805,10 @@ bool allows_player_attack(uint8_t attacker, uint8_t target)
 {
     return rivals::allows_player_attack(g_rivals_state, Stage::Tribe, attacker, target);
 }
+bool allows_player_attack(Stage stage, uint8_t attacker, uint8_t target)
+{
+    return rivals::allows_player_attack(g_rivals_state, stage, attacker, target);
+}
 }
 
 extern "C" SK_EXPORT const SkModInfo* sporekit_mod_main(const SkHost* host, SkMod* self)
