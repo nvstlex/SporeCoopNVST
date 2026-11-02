@@ -2239,6 +2239,33 @@ std::string debug(const std::vector<std::string>& a)
                  (unsigned)members(t).size(), net::dist(tp, c));
         return b;
     }
+    if (!a.empty() && a[0] == "factions") { // read-only native cTribe inventory for the Rivals prototype
+        auto tribes = all_tribes();
+        void* pt = player_tribe();
+        std::string out;
+        char b[256];
+        for (size_t i = 0; i < tribes.size(); ++i) {
+            void* t = tribes[i];
+            if (!t || !game::object_alive(t) || !skg::readable(t, 0x554))
+                continue;
+            auto ms = members(t);
+            void* hut = nullptr;
+            int food = -1;
+            // Both getters are verified cTribe vtable slots in docs/re/tribe.md.
+            if (skg::readable(t, sizeof(void*))) {
+                hut = vcall<void*>(t, 0xAC / 4);
+                food = vcall<int>(t, 0xA4 / 4);
+            }
+            net::Vec3 p = tribe_pos(t);
+            snprintf(b, sizeof b,
+                     "tribe[%u] %p%s pos=(%.1f %.1f %.1f) members=%u hut=%p food=%d archetype=%d food_container=%p\\n",
+                     (unsigned)i, t, t == pt ? " PLAYER" : "", p.x, p.y, p.z,
+                     (unsigned)ms.size(), hut, food, (int)F<uint32_t>(t, 0x550),
+                     (void*)((uint8_t*)t + 0x20C));
+            out += b;
+        }
+        return out.empty() ? "no readable cTribe objects" : out;
+    }
     if (!a.empty() && a[0] == "trees") { // trees near the village with their raw fields (RE)
         net::Vec3 at;
         center(at);
@@ -2285,7 +2312,7 @@ std::string debug(const std::vector<std::string>& a)
             out += q.v[i].second;
         return out + std::to_string(q.v.size()) + " objects";
     }
-    return "usage: coop.tribe select <id> <0|1> | select_own <n> <0|1> | walk <x> <y> <z> | act <action> <target id> | objs <noun hex>";
+    return "usage: coop.tribe factions | select <id> <0|1> | select_own <n> <0|1> | walk <x> <y> <z> | act <action> <target id> | objs <noun hex>";
 }
 
 // the citizen's current behaviour-tree node (ai = c+0xB4C, node id at ai+0x1D8; docs/re/tribe.md B)
