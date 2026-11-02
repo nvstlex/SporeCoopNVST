@@ -242,6 +242,15 @@ static int host_index_of_city(void* c)
     return -1;
 }
 
+static void* player_capital_city()
+{
+    void* civ = player_civ();
+    if (!civ || !skg::readable(civ, 0xA0))
+        return nullptr;
+    const auto cities = vec_of((uint8_t*)civ + 0x9C);
+    return cities.empty() ? nullptr : cities.front();
+}
+
  // In Civilization Rivals, only a declared war permits player-vs-player attack orders.
  // The native player civilization is still shared, so use the co-op owner maps; NPCs remain vanilla.
 static bool attack_order_allowed(void* attacker, void* target, int order_type, std::string* reason = nullptr)
@@ -259,8 +268,8 @@ static bool attack_order_allowed(void* attacker, void* target, int order_type, s
     if (to >= rivals::kMaxPlayers || to == from)
         return true;
 
-    // The first player city is the capital in the current host city ordering. It is never capturable.
-    if (city_target && host_index_of_city(target) == 0) {
+    // The first native city in the player civilization's city vector is its capital.
+    if (city_target && target == player_capital_city()) {
         if (reason) *reason = "the capital is protected";
         return false;
     }
