@@ -3087,6 +3087,8 @@ void setup_callbacks()
     };
     g_sess.cb.player_join = [](const net::PlayerInfo& p) {
         support::on_player_join(p);
+        if (g_sess.role() == net::Role::Host)
+            rivals_broadcast_state(); // full settings snapshot for the newcomer
         shared::on_player_join(g_sess.role());
         creations::on_player_join(p.id);
         npc::on_player_leave(p.id); // a newcomer under a reused id knows no NPCs yet (BUG-0125)
@@ -3144,6 +3146,18 @@ void setup_callbacks()
         }
     };
     g_sess.cb.custom = [](uint8_t type, uint8_t from, net::Reader& r) {
+        if (type == net::MSG_RIVALS_STATE) {
+            // The host is the sole authority; guests only accept a complete snapshot from player 0.
+            if (g_sess.role() == net::Role::Host || from != 0) return;
+            rivals::SessionState next;
+            if (rivals::read_state(r, next)) {
+                g_rivals_state = next;
+                g_lobby_dirty = true;
+            } else {
+                trace::line("rivals", "rejected malformed stage-state packet from host");
+            }
+            return;
+        }
         if (type == net::MSG_DIAG) { // support diagnostics: clock, marks, sync-check (diag_coop.h)
             support::on_message(from, r);
             return;
@@ -3375,6 +3389,9 @@ void setup_callbacks()
         if (g_role_fix)
             g_roles.erase(id); // ids are reused: the next newcomer starts with no role (BUG-0064)
         shared::on_player_leave(id);
+        g_rivals_state.clear_player(id);
+        if (g_sess.role() == net::Role::Host)
+            rivals_broadcast_state();
         creations::on_player_leave(id); // BUG-0076: the next player of this id is not shown as this one
         npc::on_player_leave(id);       // BUG-0125
         views::forget(id);              // BUG-0280
@@ -3408,6 +3425,7 @@ uint16_t default_port() { return (uint16_t)(net::kDefaultPort + H->instance_id()
 
 void reset_lobby()
 {
+    g_rivals_state.reset();
     if (g_role_fix)
         g_roles.clear(); // a new session starts with no roles (BUG-0064)
     g_ready.clear();
