@@ -2452,12 +2452,12 @@ std::string debug(const std::vector<std::string>& a)
             const auto money = thiscall<float>(a_GetMoney, civ);
             const auto culture = F<void*>(civ, 0x6C);
             snprintf(line, sizeof line,
-                     "civ %zu %p pol=%08X%s player_flag=%u money=%.1f cities=%u vehicles=%u culture=%p\\n",
+                     "civ %zu %p pol=%08X%s player_flag=%u money=%.1f cities=%u vehicles=%u culture=%p\n",
                      i, civ, pol, civ == me_civ ? " PLAYER" : "", (unsigned)F<uint8_t>(civ, 0x89),
                      money, (unsigned)cities.size(), (unsigned)vehicles.size(), culture);
             out += line;
         }
-        return out.empty() ? "no readable civilizations\\n" : out;
+        return out.empty() ? "no readable civilizations\n" : out;
     }
     if (!a.empty() && a[0] == "tables") { // sizes of the pointer tables (tests: BUG-0040, BUG-0059)
         char b[320];
