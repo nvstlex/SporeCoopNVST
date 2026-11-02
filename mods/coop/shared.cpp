@@ -251,8 +251,8 @@ void tick(net::Session& s, uint32_t mode, double now, bool elsewhere)
                     // The host keeps any remainder; every guest receives its own initial budget.
                     const auto players = s.players();
                     const size_t count = std::max<size_t>(1, players.size());
-                    const double guest_share = v / count;
-                    const double host_share = v - guest_share * (count - 1);
+                    const double guest_share = net::shared_split(v, count, 1);
+                    const double host_share = net::shared_split(v, count, 0);
                     r.set(host_share);
                     r.synced = host_share;
                     for (const auto& player : players) {
