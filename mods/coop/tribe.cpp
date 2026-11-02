@@ -358,33 +358,35 @@ static int SK_THISCALL h_DoActionForObjects(void* self, void* vec, int action, v
             g_local_orders++;
             // In Tribe Rivals, player-vs-player attacks require an explicit War relation.
             // Keep the game's original order path for NPCs and all non-attack actions.
-            if (action == 7 && is_citizen(target)) {
+            if (action == 7 && is_citizen(target) && F<void*>(target, kOwnerTribeOff) == player_tribe()) {
                 const uint8_t victim = owner_of(target);
-                if (victim < rivals::kMaxPlayers) {
-                    std::vector<void*> allowed;
-                    void** begin = vec ? F<void**>(vec, 0) : nullptr;
-                    void** end = vec ? F<void**>(vec, 4) : nullptr;
-                    unsigned blocked = 0;
-                    for (void** it = begin; it && it < end; ++it) {
-                        void* spatial = *it;
-                        void* attacker = spatial ? (uint8_t*)spatial - 0xC0 : nullptr;
-                        const uint8_t owner = attacker && is_citizen(attacker) ? owner_of(attacker) : 0xFF;
-                        if (owner < rivals::kMaxPlayers && !player_attack_allowed(owner, victim)) {
-                            ++blocked;
-                            continue;
-                        }
-                        allowed.push_back(spatial);
+                std::vector<void*> allowed;
+                void** begin = vec ? F<void**>(vec, 0) : nullptr;
+                void** end = vec ? F<void**>(vec, 4) : nullptr;
+                unsigned blocked = 0;
+                for (void** it = begin; it && it < end; ++it) {
+                    void* spatial = *it;
+                    void* attacker = spatial ? (uint8_t*)spatial - 0xC0 : nullptr;
+                    const uint8_t owner = attacker && is_citizen(attacker) ? owner_of(attacker) : 0xFF;
+                    if (owner >= rivals::kMaxPlayers || !player_attack_allowed(owner, victim)) {
+                        ++blocked;
+                        continue;
                     }
-                    if (blocked) {
-                        g_last_local += " blocked=" + std::to_string(blocked) + " (not at war)";
-                        if (C.notice)
+                    allowed.push_back(spatial);
+                }
+                if (blocked) {
+                    g_last_local += " blocked=" + std::to_string(blocked) + " (not at war)";
+                    if (C.notice) {
+                        if (victim < rivals::kMaxPlayers)
                             C.notice(C.sess->name_of(C.sess->my_id()) + " cannot attack " +
                                      C.sess->name_of(victim) + " while not at war");
-                        if (allowed.empty())
-                            return 1;
-                        void* filtered[3] = {allowed.data(), allowed.data() + allowed.size(), allowed.data() + allowed.size()};
-                        return o_DoActionForObjects(self, filtered, action, target, prop);
+                        else
+                            C.notice("Tribe Rivals blocked an attack on an unassigned player tribe member");
                     }
+                    if (allowed.empty())
+                        return 1;
+                    void* filtered[3] = {allowed.data(), allowed.data() + allowed.size(), allowed.data() + allowed.size()};
+                    return o_DoActionForObjects(self, filtered, action, target, prop);
                 }
             }
         }
@@ -711,13 +713,13 @@ static void host_command(uint8_t from, net::Reader& r)
             g_cmds_rejected++;
             continue;
         }
-        if (kind == CMD_ACTION && action == 7 && is_citizen(target)) {
+        if (kind == CMD_ACTION && action == 7 && is_citizen(target) && F<void*>(target, kOwnerTribeOff) == pt) {
             const uint8_t victim = owner_of(target);
-            if (victim < rivals::kMaxPlayers && !player_attack_allowed(from, victim)) {
+            if (!player_attack_allowed(from, victim)) {
                 g_cmds_rejected++;
                 relation_blocked = true;
                 relation_victim = victim;
-                g_last_cmd += " rejected: target player is not at war";
+                g_last_cmd += " rejected: target player is not at war or not assigned";
                 continue;
             }
         }
@@ -730,8 +732,12 @@ static void host_command(uint8_t from, net::Reader& r)
             thiscall<void*>(a_DoAction, c, action, target, (void*)nullptr);
         g_cmds_done++;
     }
-    if (relation_blocked && C.notice)
-        C.notice(C.sess->name_of(from) + " cannot attack " + C.sess->name_of(relation_victim) + " while not at war");
+    if (relation_blocked && C.notice) {
+        if (relation_victim < rivals::kMaxPlayers)
+            C.notice(C.sess->name_of(from) + " cannot attack " + C.sess->name_of(relation_victim) + " while not at war");
+        else
+            C.notice(C.sess->name_of(from) + " cannot attack an unassigned player tribe member in Rivals");
+    }
 }
 
 // ---------------- guest: mirrors ----------------
