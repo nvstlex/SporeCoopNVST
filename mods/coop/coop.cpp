@@ -4506,9 +4506,9 @@ void init_ui()
         auto s = static_cast<rivals::Stage>(stage);
         auto next = g_rivals_state.stage_mode(s) == rivals::StageMode::Rivals
             ? rivals::StageMode::Together : rivals::StageMode::Rivals;
-        g_rivals_state.set_stage_mode(s, next);
-        rivals_broadcast_state();
-        g_lobby_dirty = true;
+        std::string err;
+        if (!rivals_apply_stage_mode(s, next, err))
+            feed("cannot switch stage mode: " + err);
     };
     a.say = [](const std::string& t) {
         if (support::chat_command(t)) // "/bug <text>" (docs/REPORTING.md#reporting-support)
