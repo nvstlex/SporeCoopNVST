@@ -669,6 +669,11 @@ static void build_dialog()
         g_space_page = true;
         g_dirty = true;
     });
+    D.rivals_btn = add_button(L, "rivals", {400, 66, 565, 98}, T("Stage modes >", "Режимы этапов >"), [] {
+        g_space_page = false;
+        g_rivals_page = true;
+        g_dirty = true;
+    });
     D.chat_edit = add_edit(L, "chatedit", {40, 438, 560, 470}, "", 120);
     D.send_btn = add_button(L, "send", {570, 434, 720, 474}, T("Send", "Отправить"), do_send_chat);
     D.ready_btn = add_button(L, "ready", {40, 488, 240, 528}, "", [] {
@@ -682,6 +687,28 @@ static void build_dialog()
     D.leave_btn = add_button(L, "leave", {500, 488, 720, 528}, "", [] {
         A.leave();
         set_status(T("Left the session", "Вы вышли из игры"), kYellow, g_status_fix ? 5 : 0);
+    });
+    // ---- Per-stage Rivals page ----
+    auto& R = D.page_rivals;
+    D.rivals_title = add_label(R, {40, 104, 720, 136},
+        T("Choose a mode for every stage", "Выберите режим для каждого этапа"), kGold);
+    static const char* stage_names[5] = {"Cell", "Creature", "Tribe", "Civilization", "Space"};
+    static const char* stage_names_ru[5] = {"Клетка", "Существо", "Племя", "Цивилизация", "Космос"};
+    for (int i = 0; i < 5; ++i) {
+        float y = 150.f + i * 54.f;
+        D.rivals_stage[i] = add_label(R, {48, y + 3, 390, y + 35},
+            T(stage_names[i], stage_names_ru[i]), kWhite);
+        char nm[20];
+        snprintf(nm, sizeof nm, "rivals_stage_%d", i);
+        D.rivals_toggle[i] = add_button(R, nm, {440, y, 690, y + 38}, "", [i] {
+            if (A.can_edit_stage_modes && A.can_edit_stage_modes() && A.toggle_stage_mode)
+                A.toggle_stage_mode(i);
+            g_dirty = true;
+        });
+    }
+    D.rivals_back = add_button(R, "rivals_back", {40, 488, 240, 528}, T("< Lobby", "< Лобби"), [] {
+        g_rivals_page = false;
+        g_dirty = true;
     });
     // ---- Space page ----
     auto& S = D.page_space;
