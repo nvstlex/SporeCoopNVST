@@ -14,7 +14,7 @@ static void test_stage_modes()
     CHECK(s.set_stage_mode(rivals::Stage::Tribe, rivals::StageMode::Rivals));
     CHECK(s.stage_mode(rivals::Stage::Tribe) == rivals::StageMode::Rivals);
     CHECK(rivals::effective_stage_mode(s, rivals::Stage::Tribe) == rivals::StageMode::Rivals);
-    CHECK(s.set_stage_mode(rivals::Stage::Civilization, rivals::StageMode::Rivals));
+    CHECK(!s.set_stage_mode(rivals::Stage::Civilization, rivals::StageMode::Rivals));
     CHECK(rivals::effective_stage_mode(s, rivals::Stage::Civilization) == rivals::StageMode::Together);
     CHECK(!s.set_stage_mode(static_cast<rivals::Stage>(99), rivals::StageMode::Rivals));
     CHECK(!s.set_stage_mode(rivals::Stage::Tribe, static_cast<rivals::StageMode>(99)));
@@ -106,7 +106,7 @@ static void test_wire_roundtrip_and_validation()
 {
     rivals::SessionState source;
     source.set_stage_mode(rivals::Stage::Cell, rivals::StageMode::Rivals);
-    source.set_stage_mode(rivals::Stage::Civilization, rivals::StageMode::Rivals);
+    CHECK(!source.set_stage_mode(rivals::Stage::Civilization, rivals::StageMode::Rivals));
     source.set_relation(0, 1, rivals::Relation::Ally);
     source.set_relation(1, 3, rivals::Relation::War);
 
@@ -132,6 +132,12 @@ static void test_wire_roundtrip_and_validation()
     net::Reader bad_mode(bad_bytes.data(), bad_bytes.size());
     CHECK(!rivals::read_state(bad_mode, decoded));
     CHECK(decoded.stage_mode(rivals::Stage::Cell) == rivals::StageMode::Rivals); // failure is atomic
+
+    bad_bytes = w.data;
+    bad_bytes[4] = static_cast<uint8_t>(rivals::StageMode::Rivals); // Civilization is co-op only
+    net::Reader bad_civ_mode(bad_bytes.data(), bad_bytes.size());
+    CHECK(!rivals::read_state(bad_civ_mode, decoded));
+    CHECK(decoded.stage_mode(rivals::Stage::Civilization) == rivals::StageMode::Together);
 
     bad_bytes = w.data;
     bad_bytes[6] = 99; // invalid player relation
