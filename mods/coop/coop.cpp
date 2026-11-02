@@ -153,6 +153,23 @@ static bool rivals_parse_stage(const char* text, rivals::Stage& out)
     else return false;
     return true;
 }
+static bool rivals_apply_stage_mode(rivals::Stage stage, rivals::StageMode mode, std::string& err)
+{
+    if (g_sess.role() != net::Role::Host || !g_sess.connected()) {
+        err = "host only";
+        return false;
+    }
+    // Reuse Space mode money splitting/merging when its world is already active.
+    if (stage == rivals::Stage::Space && game::mode_id() == modes::kSpace &&
+        spaceext::rivals() != (mode == rivals::StageMode::Rivals)) {
+        err = rivalry::set_enabled(mode == rivals::StageMode::Rivals);
+        if (!err.empty()) return false;
+    }
+    g_rivals_state.set_stage_mode(stage, mode);
+    rivals_broadcast_state();
+    g_lobby_dirty = true;
+    return true;
+}
 std::string g_name = "Player";
 double g_last_send = 0;
 void* g_last_avatar = nullptr;
