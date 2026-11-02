@@ -913,12 +913,14 @@ static void refresh_rivals()
     for (int i = 0; i < 5; ++i) {
         static const char* names_en[5] = {"Cell", "Creature", "Tribe", "Civilization", "Space"};
         static const char* names_ru[5] = {"Клетка", "Существо", "Племя", "Цивилизация", "Космос"};
+        const bool cooperative_only = i == (int)rivals::Stage::Civilization;
         const bool rivals = A.stage_mode && A.stage_mode(i) == 1;
-        text(D.rivals_stage[i], std::string(T(names_en[i], names_ru[i])) + "  —  " +
-             (rivals ? T("Rivals", "Соперники") : T("Together", "Вместе")));
+        const char* mode = cooperative_only ? T("Co-op only", "Только кооператив")
+                                             : (rivals ? T("Rivals", "Соперники") : T("Together", "Вместе"));
+        text(D.rivals_stage[i], std::string(T(names_en[i], names_ru[i])) + "  —  " + mode);
         text(D.rivals_toggle[i], rivals ? T("Rivals", "Соперники") : T("Together", "Вместе"));
         color(D.rivals_toggle[i], rivals ? kYellow : kGreen);
-        show(D.rivals_toggle[i], editable);
+        show(D.rivals_toggle[i], editable && !cooperative_only);
     }
     text(D.rivals_title, editable
         ? T("Choose a mode for every stage", "Выберите режим для каждого этапа")
