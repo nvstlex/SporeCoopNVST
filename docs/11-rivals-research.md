@@ -55,7 +55,23 @@ Important verified facts from `docs/re/civ.md`:
 ID, with cities and vehicles attached through native bookkeeping. Merely writing a different
 `g_city_owner` value does not create an independent economy, AI planner, culture set or nation.
 
-## 2. Safe implementation order
+## 2. Read-only Tribe inventory diagnostic
+
+The Tribe debug command now includes `coop.tribe factions`. It enumerates live
+`cTribe` nouns on the current game copy and prints:
+
+* native object address and whether it is the local `GetPlayerTribe` result;
+* world position and current member-vector count;
+* native hut pointer and food returned by the verified `GetTotalFood` vtable slot;
+* archetype and the address of the tribe's food-container field.
+
+Run it once on the host and once on a guest in the same disposable world. Compare the
+counts, positions, player markers, hut pointers and food. Pointers are process-local and
+must not be compared as identities across machines; use position/archetype/member count
+to correlate likely counterparts. The command is read-only: it does not create tribes,
+move citizens, or change the player-tribe pointer.
+
+## 3. Safe implementation order
 
 Do not switch the lobby to offer a stage as fully playable Rivals until its native faction
 prototype survives a two-process test.
@@ -88,7 +104,7 @@ prototype survives a two-process test.
 5. Verify how each guest's `GetPlayerCivilization` can point to its own nation. If this is not
    supported, do not advertise independent civilization gameplay.
 
-## 3. Current blockers and non-goals
+## 4. Current blockers and non-goals
 
 * The current branch's per-player Tribe food and Civilization money are local-copy balances, not
   balances stored on independent native factions.
@@ -102,7 +118,7 @@ prototype survives a two-process test.
 * Keep the current Together behaviour unchanged. Rivals-specific hooks must be gated by the
   selected stage mode and have a safe fallback when the prototype is unavailable.
 
-## 4. Decision
+## 5. Decision
 
 The next code milestone is **a diagnostic and disposable native-faction prototype**, not a
 premature implementation of the full stage. Tribe is the first candidate because the mod already
