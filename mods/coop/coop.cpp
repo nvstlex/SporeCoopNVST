@@ -39,6 +39,8 @@
 #include "autoupdate.h"
 #include "gamefixes.h"
 #include "spacecoop.h"
+#include "space_ext.h"
+#include "space_rivalry.h"
 #include "squadron.h"
 #include "npc.h"
 #include "creature_hp.h"
