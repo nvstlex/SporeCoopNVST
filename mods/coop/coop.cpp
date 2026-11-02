@@ -5010,9 +5010,11 @@ extern "C" SK_EXPORT const SkModInfo* sporekit_mod_main(const SkHost* host, SkMo
                                H->out_printf(out, "mode must be together or rivals");
                                return 1;
                            }
-                           g_rivals_state.set_stage_mode(stage, mode);
-                           rivals_broadcast_state();
-                           g_lobby_dirty = true;
+                           std::string err;
+                           if (!rivals_apply_stage_mode(stage, mode, err)) {
+                               H->out_printf(out, "cannot switch: %s", err.c_str());
+                               return 1;
+                           }
                        }
                        for (uint8_t i = 0; i < rivals::kStageCount; ++i) {
                            auto stage = static_cast<rivals::Stage>(i);
