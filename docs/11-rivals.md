@@ -15,8 +15,9 @@ The first implementation slice is on the `nvst/rivals-foundation` branch:
 * The host sends the complete snapshot when a player joins. The co-op lobby has a Stage modes page; only the host can edit it.
 * `coop.rivals` can inspect and change stage modes, list player IDs, and set a pair's generic relation state from the console.
 * When the Space stage is already active, changing its mode routes through the existing Space Rivals transition so its established money split/merge code is used.
+* Tribe food and Civilization money stop using the shared host total in their Rivals stages. Each running game copy keeps its local balance; when the host switches that stage back to Together, each guest sends its balance once and it is merged into the host total using the existing acknowledged resource ledger.
 
-This is **not yet the complete Rivals gameplay**. The settings table is session-only and is not yet persisted in save files. Independent faction ownership, separate DNA/food/money ledgers outside the existing Space implementation, NPC diplomacy per player, stage-specific combat/capture rules, spawn-site allocation, catch-up timers and draft rewards remain to be implemented. The generic relation table is currently session data and does not yet alter game AI or combat in any stage. Space continues to use its pre-existing, separate diplomacy table.
+This is **not yet the complete Rivals gameplay**. The settings table is session-only and is not yet persisted in save files. Tribe/Civ balances are local to each running game copy during Rivals and are not yet retained by the host for late rejoin or written to faction-specific save data. Independent faction ownership, separate DNA and Creature-stage progression, per-player NPC diplomacy, stage-specific combat/capture rules, spawn-site allocation, catch-up timers and draft rewards remain to be implemented. The generic relation table is currently session data and does not yet alter game AI or combat in any stage. Space continues to use its pre-existing, separate diplomacy table.
 
 ## 11.1 Decisions
 
