@@ -109,8 +109,6 @@ struct Res {
     // state
     bool have = false;   // synced at least once in this session
     bool own_budget_last = false; // Tribe/Civ: merge the local balance on return from Rivals
-    bool own_allocation_pending = false; // a host split waits until the local stage resource exists
-    double own_allocation = 0;
     double synced = 0;   // value after the last sync (guest) / last broadcast (host)
     net::SharedLedger led; // guest: changes not sent yet / sent and not counted by the host yet
     double last_send = 0;
@@ -184,22 +182,10 @@ void on_session_change()
         r.have = false;
 }
 
-void on_player_join(net::Session& s, net::Role role, uint8_t id)
+void on_player_join(net::Role role)
 {
     if (net::reset_on_join(role == net::Role::Host, g_join_keep_fix))
         on_session_change(); // the host: the newcomer gets the totals at once
-    if (role == net::Role::Host && id != 0) {
-        // A guest joining an active Rivals stage has no saved faction balance yet. Start it at
-        // zero rather than cloning the host's private balance into a second economy.
-        for (auto& r : g_res) {
-            if (r.mode != modes::kSpace && r.mode == g_mode && own_budget(r)) {
-                net::Writer w;
-                w.u8(r.id);
-                w.f64(0);
-                s.send_reliable_to(id, net::MSG_RIVALS_RES, w);
-            }
-        }
-    }
 }
 
 void on_session_end()
@@ -209,8 +195,6 @@ void on_session_end()
     for (auto& r : g_res) {
         r.have = false;
         r.own_budget_last = false;
-        r.own_allocation_pending = false;
-        r.own_allocation = 0;
         r.led.reset();
         r.acked.clear();
         r.ack_dirty = false;
@@ -238,33 +222,9 @@ void tick(net::Session& s, uint32_t mode, double now, bool elsewhere)
     for (auto& r : g_res) {
         double v;
         if (own_budget(r)) {
-            if (r.mode != modes::kSpace && r.mode == mode && r.get(v)) {
-                if (r.own_allocation_pending) {
-                    r.set(r.own_allocation);
-                    double applied = 0;
-                    if (r.get(applied) && std::fabs(applied - r.own_allocation) < 1e-2)
-                        r.own_allocation_pending = false;
-                    r.get(v);
-                }
-                if (!r.own_budget_last && s.role() == net::Role::Host) {
-                    // Split the shared starting balance evenly when this stage enters Rivals.
-                    // The host keeps any remainder; every guest receives its own initial budget.
-                    const auto players = s.players();
-                    const size_t count = std::max<size_t>(1, players.size());
-                    const double guest_share = net::shared_split(v, count, 1);
-                    const double host_share = net::shared_split(v, count, 0);
-                    r.set(host_share);
-                    r.synced = host_share;
-                    for (const auto& player : players) {
-                        if (player.id == 0) continue;
-                        net::Writer w;
-                        w.u8(r.id);
-                        w.f64(guest_share);
-                        s.send_reliable_to(player.id, net::MSG_RIVALS_RES, w);
-                    }
-                }
+            // Each game copy keeps its own balance. Preserve any local pending changes on entry.
+            if (r.mode != modes::kSpace && r.mode == mode && r.get(v))
                 r.own_budget_last = true;
-            }
             r.have = false;
             r.led.reset();
             continue;
@@ -341,20 +301,6 @@ void on_message(net::Session& s, uint8_t type, uint8_t from, net::Reader& rd)
     double v = rd.f64();
     if (!rd.ok() || !std::isfinite(v))
         return;
-    if (type == net::MSG_RIVALS_RES) {
-        if (s.role() != net::Role::Client || from != 0 || v < 0 || v > 1e9)
-            return;
-        for (auto& r : g_res) {
-            if (r.id != id || r.mode == modes::kSpace || !own_budget(r))
-                continue;
-            r.own_allocation = v;
-            r.own_allocation_pending = true;
-            r.have = false;
-            r.own_budget_last = false;
-            return;
-        }
-        return;
-    }
     for (auto& r : g_res) {
         if (r.id != id)
             continue;
