@@ -2258,7 +2258,7 @@ std::string debug(const std::vector<std::string>& a)
             }
             net::Vec3 p = tribe_pos(t);
             snprintf(b, sizeof b,
-                     "tribe[%u] %p%s pos=(%.1f %.1f %.1f) members=%u hut=%p food=%d archetype=%d food_container=%p\\n",
+                     "tribe[%u] %p%s pos=(%.1f %.1f %.1f) members=%u hut=%p food=%d archetype=%d food_container=%p\n",
                      (unsigned)i, t, t == pt ? " PLAYER" : "", p.x, p.y, p.z,
                      (unsigned)ms.size(), hut, food, (int)F<uint32_t>(t, 0x550),
                      (void*)((uint8_t*)t + 0x20C));
