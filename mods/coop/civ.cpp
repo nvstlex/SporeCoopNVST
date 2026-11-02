@@ -1006,7 +1006,7 @@ static void host_assign_cities(const std::vector<uint8_t>& players)
     g_split_for = players;
     if (cities.empty())
         return;
-    // the first city of the player civ is the capital: the host's; the others in turns
+    // the first city is the capital; it is shared until there are enough cities for every player.
     net::Vec3 cap = city_pos(cities[0]);
     std::sort(cities.begin() + 1, cities.end(),
               [&](void* a, void* b) { return net::dist(city_pos(a), cap) < net::dist(city_pos(b), cap); });
