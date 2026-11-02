@@ -22,6 +22,7 @@
 #include <cstring>
 #include <deque>
 #include <map>
+#include <memory>
 #include <string>
 
 #include "adapters.h"
