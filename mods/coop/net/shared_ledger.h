@@ -9,6 +9,7 @@
 #pragma once
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -85,6 +86,14 @@ struct SharedLedger {
 
 // the host counts a guest's change: the shared total never goes below 0 (the part a crossing
 // spend could not cover is lost, the game already made the purchase)
+inline double shared_split(double total, size_t players, size_t player_index)
+{
+    if (!players || player_index >= players)
+        return 0;
+    const double share = total / players;
+    return player_index == 0 ? total - share * (players - 1) : share;
+}
+
 inline double shared_add(double cur, double change, bool floor)
 {
     double n = cur + change;
