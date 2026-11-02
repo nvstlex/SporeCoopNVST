@@ -159,6 +159,13 @@ static bool rivals_parse_stage(const char* text, rivals::Stage& out)
 }
 extern bool g_lobby_dirty; // defined with the lobby state below
 
+static rivals::StageMode rivals_get_stage_mode(rivals::Stage stage)
+{
+    if (stage == rivals::Stage::Space && game::mode_id() == modes::kSpace)
+        return spaceext::rivals() ? rivals::StageMode::Rivals : rivals::StageMode::Together;
+    return g_rivals_state.stage_mode(stage);
+}
+
 static bool rivals_apply_stage_mode(rivals::Stage stage, rivals::StageMode mode, std::string& err)
 {
     if (g_sess.role() != net::Role::Host || !g_sess.connected()) {
@@ -4509,7 +4516,7 @@ void init_ui()
     a.vote_active = [] { return g_vote.active; };
     a.stage_mode = [](int stage) {
         if (stage < 0 || stage >= (int)rivals::kStageCount) return 0;
-        return g_rivals_state.stage_mode(static_cast<rivals::Stage>(stage)) == rivals::StageMode::Rivals ? 1 : 0;
+        return rivals_get_stage_mode(static_cast<rivals::Stage>(stage)) == rivals::StageMode::Rivals ? 1 : 0;
     };
     a.can_edit_stage_modes = [] { return g_sess.role() == net::Role::Host && g_sess.connected(); };
     a.toggle_stage_mode = [](int stage) {
@@ -4519,7 +4526,7 @@ void init_ui()
             (*fn)();
         }, new std::function<void()>([stage] {
             auto s = static_cast<rivals::Stage>(stage);
-            auto next = g_rivals_state.stage_mode(s) == rivals::StageMode::Rivals
+            auto next = rivals_get_stage_mode(s) == rivals::StageMode::Rivals
                 ? rivals::StageMode::Together : rivals::StageMode::Rivals;
             std::string err;
             if (!rivals_apply_stage_mode(s, next, err))
@@ -5074,7 +5081,7 @@ extern "C" SK_EXPORT const SkModInfo* sporekit_mod_main(const SkHost* host, SkMo
                        for (uint8_t i = 0; i < rivals::kStageCount; ++i) {
                            auto stage = static_cast<rivals::Stage>(i);
                            H->out_printf(out, "%s: %s", rivals_stage_name(stage),
-                               g_rivals_state.stage_mode(stage) == rivals::StageMode::Rivals ? "rivals" : "together");
+                               rivals_get_stage_mode(stage) == rivals::StageMode::Rivals ? "rivals" : "together");
                        }
                        const char* rel[] = {"neutral", "ally", "war"};
                        const auto players = g_sess.players();
