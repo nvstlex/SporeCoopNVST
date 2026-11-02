@@ -55,6 +55,7 @@ constexpr uint32_t kGold = 0xFFFFCC4D, kWhite = 0xFFFFFFFF, kDim = 0xFF9DB8CC, k
 constexpr float kW = 760, kH = 600; // 560 + a footer row (version, "Report a problem")
 constexpr int kSpaceRows = 12;
 static bool g_space_page; // the lobby shows the Space page instead
+static bool g_rivals_page; // per-stage Together / Rivals settings
 static int g_lan_first;   // the first game on the network listed (pages of three, BUG-0183)
 bool g_lan_pages_fix = true; // `coop.corefix lan_pages 0`: only the first three games, no "More" (BUG-0183)
 COOP_FIX("core.lan_pages", "BUG-0183", g_lan_pages_fix, "ui: every network game is listed, with More pages");
@@ -244,6 +245,10 @@ struct Dialog {
     Win chat_up = nullptr, chat_down = nullptr;
     Win creation = nullptr, creation_prev = nullptr, creation_next = nullptr, give_btn = nullptr, give_next = nullptr, jump_btn = nullptr;
     Win space_btn = nullptr; // lobby -> the Space page (Space stage only)
+    Win rivals_btn = nullptr;
+    std::vector<Win> page_rivals;
+    Win rivals_title = nullptr, rivals_back = nullptr;
+    Win rivals_stage[5] = {}, rivals_toggle[5] = {};
     // Space page: the rows of the space features (space_ext.h)
     std::vector<Win> page_space;
     Win space_title = nullptr, space_back = nullptr, space_prev = nullptr, space_next = nullptr, space_pageno = nullptr;
