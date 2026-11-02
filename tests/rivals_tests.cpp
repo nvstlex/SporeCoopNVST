@@ -45,17 +45,20 @@ static void test_player_combat_policy()
     CHECK(!rivals::allows_player_attack(s, 0, 0));
     CHECK(!rivals::allows_player_attack(s, 0, 4));
     CHECK(!rivals::allows_player_attack(s, 4, 0));
-    CHECK(rivals::allows_player_attack(s, rivals::Stage::Tribe, 0, 1)); // Together keeps vanilla combat
-    CHECK(rivals::allows_player_attack(s, rivals::Stage::Civilization, 0, 1)); // Civ Together is unchanged too
+
+    CHECK(s.set_relation(0, 1, rivals::Relation::Neutral));
+    CHECK(rivals::allows_player_attack(s, rivals::Stage::Tribe, 0, 1)); // Together preserves vanilla
+    CHECK(rivals::allows_player_attack(s, rivals::Stage::Civilization, 0, 1));
     CHECK(s.set_stage_mode(rivals::Stage::Tribe, rivals::StageMode::Rivals));
-    CHECK(!rivals::allows_player_attack(s, rivals::Stage::Tribe, 0, 1)); // Neutral blocks in Rivals
-    CHECK(s.set_relation(0, 1, rivals::Relation::War));
-    CHECK(rivals::allows_player_attack(s, rivals::Stage::Tribe, 0, 1));
-    CHECK(!rivals::allows_player_attack(s, rivals::Stage::Civilization, 0, 1)); // Civ neutral blocks
+    CHECK(s.set_stage_mode(rivals::Stage::Civilization, rivals::StageMode::Rivals));
+    CHECK(!rivals::allows_player_attack(s, rivals::Stage::Tribe, 0, 1)); // Neutral blocks
+    CHECK(!rivals::allows_player_attack(s, rivals::Stage::Civilization, 0, 1));
     CHECK(s.set_relation(0, 1, rivals::Relation::Ally));
-    CHECK(!rivals::allows_player_attack(s, rivals::Stage::Civilization, 0, 1)); // Civ ally blocks
+    CHECK(!rivals::allows_player_attack(s, rivals::Stage::Tribe, 0, 1)); // Ally blocks
+    CHECK(!rivals::allows_player_attack(s, rivals::Stage::Civilization, 0, 1));
     CHECK(s.set_relation(0, 1, rivals::Relation::War));
-    CHECK(rivals::allows_player_attack(s, rivals::Stage::Civilization, 0, 1)); // Civ war permits
+    CHECK(rivals::allows_player_attack(s, rivals::Stage::Tribe, 0, 1)); // War permits
+    CHECK(rivals::allows_player_attack(s, rivals::Stage::Civilization, 0, 1));
 }
 
 static void test_rivals_balance_merge_ledger()
