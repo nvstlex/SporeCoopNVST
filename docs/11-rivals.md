@@ -20,6 +20,10 @@ The first implementation slice is on the `nvst/rivals-foundation` branch:
 
 This is **not yet the complete Rivals gameplay**. The settings table is session-only and is not yet persisted in save files. Tribe/Civ balances are local to each running game copy during Rivals; a late joiner currently starts from the host world copy rather than a saved private balance, and balances are not written to faction-specific save data. Independent faction ownership, separate DNA and Creature-stage progression, per-player NPC diplomacy, stage-specific combat/capture rules, spawn-site allocation, catch-up timers and draft rewards remain to be implemented. The generic relation table is currently session data and does not yet alter game AI or combat in any stage. Space continues to use its pre-existing, separate diplomacy table.
 
+## 11.0.1 Native faction research
+
+The next implementation phase is documented in [11-rivals-research.md](11-rivals-research.md). The existing Tribe and Civilization ownership tables are network overlays, not separate native factions. The research plan requires disposable runtime prototypes for a real second `cTribe` and `cCivilization` before either stage is advertised as fully playable Rivals.
+
 ## 11.1 Decisions
 
 | Topic | Decision |
