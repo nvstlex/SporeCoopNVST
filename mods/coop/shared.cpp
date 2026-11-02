@@ -194,6 +194,7 @@ void on_session_end()
         return;
     for (auto& r : g_res) {
         r.have = false;
+        r.own_budget_last = false;
         r.led.reset();
         r.acked.clear();
         r.ack_dirty = false;
@@ -220,9 +221,11 @@ void tick(net::Session& s, uint32_t mode, double now, bool elsewhere)
     }
     for (auto& r : g_res) {
         double v;
-        if (own_budget(r)) { // paused: unsent changes stay with the player (space_rivalry.cpp splits)
+        if (own_budget(r)) {
             r.have = false;
             r.led.reset();
+            if (r.mode != modes::kSpace)
+                r.own_budget_last = true;
             continue;
         }
         if (r.mode != mode || !r.get(v)) {
@@ -233,6 +236,19 @@ void tick(net::Session& s, uint32_t mode, double now, bool elsewhere)
             r.have = false;
             r.led.pause();
             continue;
+        }
+        if (r.own_budget_last) {
+            // Returning from a Tribe/Civ Rivals stage merges this player's complete local balance
+            // into the host's total exactly once. Space has its own merge logic in space_rivalry.cpp.
+            r.own_budget_last = false;
+            r.led.reset();
+            if (s.role() == net::Role::Client) {
+                r.led.pending = v;
+                r.synced = v;
+                r.have = true;
+            } else {
+                r.have = false; // host keeps its own balance and broadcasts it as the new total
+            }
         }
         if (s.role() == net::Role::Host) {
             // broadcast the total when it changed (and once per 2 s as a safety net)
