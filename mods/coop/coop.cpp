@@ -161,6 +161,11 @@ extern bool g_lobby_dirty; // defined with the lobby state below
 
 static rivals::StageMode rivals_get_stage_mode(rivals::Stage stage)
 {
+    // Civilization's existing co-op adapter gives each player a city/vehicle ownership
+    // overlay while all players remain one native nation. It is always a shared team,
+    // never a player-vs-player Rivals stage.
+    if (stage == rivals::Stage::Civilization)
+        return rivals::StageMode::Together;
     if (stage == rivals::Stage::Space && game::mode_id() == modes::kSpace)
         return spaceext::rivals() ? rivals::StageMode::Rivals : rivals::StageMode::Together;
     return g_rivals_state.stage_mode(stage);
@@ -170,6 +175,12 @@ static bool rivals_apply_stage_mode(rivals::Stage stage, rivals::StageMode mode,
 {
     if (g_sess.role() != net::Role::Host || !g_sess.connected()) {
         err = "host only";
+        return false;
+    }
+    // Civilization uses the established cooperative city-sharing adapter: every player
+    // owns/controls a city overlay, but all players are one nation against NPC civilizations.
+    if (stage == rivals::Stage::Civilization && mode == rivals::StageMode::Rivals) {
+        err = "Civilization is cooperative: players share a nation and fight NPC civilizations together";
         return false;
     }
     // Space has its own game-side transition and money split/merge. Do not let the lobby
@@ -4800,7 +4811,10 @@ SkModInfo g_info = {SK_ABI_VERSION, "coop", COOP_VERSION, on_unload};
 } // namespace
 
 namespace rivals {
-StageMode current_stage_mode(Stage stage) { return g_rivals_state.stage_mode(stage); }
+StageMode current_stage_mode(Stage stage)
+{
+    return stage == Stage::Civilization ? StageMode::Together : g_rivals_state.stage_mode(stage);
+}
 bool allows_player_attack(uint8_t attacker, uint8_t target)
 {
     return rivals::allows_player_attack(g_rivals_state, Stage::Tribe, attacker, target);
