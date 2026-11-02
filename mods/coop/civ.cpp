@@ -19,6 +19,7 @@
 #include "net/validate.h"
 #include "sporekit_game.hpp"
 #include "fixes.h"
+#include "rivals_state.h"
 
 using skg::thiscall;
 using skg::vcall;
@@ -241,6 +242,35 @@ static int host_index_of_city(void* c)
     return -1;
 }
 
+ // In Civilization Rivals, only a declared war permits player-vs-player attack orders.
+ // The native player civilization is still shared, so use the co-op owner maps; NPCs remain vanilla.
+static bool attack_order_allowed(void* attacker, void* target, int order_type, std::string* reason = nullptr)
+{
+    if (rivals::current_stage_mode(rivals::Stage::Civilization) != rivals::StageMode::Rivals ||
+        (order_type != 1 && order_type != 2))
+        return true;
+
+    const uint8_t from = owner_of_vehicle(attacker);
+    if (from >= rivals::kMaxPlayers || !target)
+        return true; // NPC / untracked attacker or target
+
+    const bool city_target = order_type == 2;
+    const uint8_t to = city_target ? owner_of_city(target) : owner_of_vehicle(target);
+    if (to >= rivals::kMaxPlayers || to == from)
+        return true;
+
+    // The first player city is the capital in the current host city ordering. It is never capturable.
+    if (city_target && host_index_of_city(target) == 0) {
+        if (reason) *reason = "the capital is protected";
+        return false;
+    }
+    if (!rivals::allows_player_attack(rivals::Stage::Civilization, from, to)) {
+        if (reason) *reason = "players are not at war";
+        return false;
+    }
+    return true;
+}
+
 static void* nearest_player_city(const net::Vec3& p, uint8_t* owner = nullptr)
 {
     void* best = nullptr;
@@ -340,13 +370,24 @@ static int SK_THISCALL h_SetOrder(void* v, void* target, int type, int flag)
 {
     if (local_play() && !g_applying)
         g_away_orders++;
+    else if (!g_applying && is_host() && game::mode_id() == modes::kCiv) {
+        std::string reason;
+        if (!attack_order_allowed(v, target, type, &reason)) {
+            if (C.notice) C.notice("attack order blocked: " + reason);
+            return 0;
+        }
+    }
     else if (!g_applying && is_guest() && game::mode_id() == modes::kCiv) {
         auto it = g_gv_of.find(v);
         if (it != g_gv_of.end()) {
-            // a mirror of another player's or nation's vehicle: the guest's own civ AI orders the
-            // other nations' vehicles every few frames (hundreds of rejected commands a minute)
+            // A guest's own vehicles can attack only a rival at war in Civilization Rivals.
             if (g_gv[it->second].owner != C.sess->my_id()) {
                 g_orders_dropped++;
+                return 0;
+            }
+            std::string reason;
+            if (!attack_order_allowed(v, target, type, &reason)) {
+                if (C.notice) C.notice("attack order blocked: " + reason);
                 return 0;
             }
             net::Writer w;
@@ -1521,6 +1562,11 @@ static void host_command(uint8_t from, net::Reader& r)
         void* target = resolve_target(t);
         if (!r.ok() || !v || (t.kind && !target))
             return reject();
+        std::string reason;
+        if (!attack_order_allowed(v, target, type, &reason)) {
+            if (C.notice) C.notice(C.sess->name_of(from) + ": attack order blocked (" + reason + ")");
+            return reject();
+        }
         o_SetOrder(v, target, type, flag);
         thiscall<void>(a_OrderStamp, v, 0);
     } else if (kind == CMD_MOVE) {
