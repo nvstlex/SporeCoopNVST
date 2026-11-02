@@ -377,6 +377,9 @@ static int SK_THISCALL h_DoActionForObjects(void* self, void* vec, int action, v
                     }
                     if (blocked) {
                         g_last_local += " blocked=" + std::to_string(blocked) + " (not at war)";
+                        if (C.notice)
+                            C.notice(C.sess->name_of(C.sess->my_id()) + " cannot attack " +
+                                     C.sess->name_of(victim) + " while not at war");
                         if (allowed.empty())
                             return 1;
                         void* filtered[3] = {allowed.data(), allowed.data() + allowed.size(), allowed.data() + allowed.size()};
@@ -693,6 +696,8 @@ static void host_command(uint8_t from, net::Reader& r)
         g_last_cmd += " rejected: no such target here";
         return; // the object is gone on the host
     }
+    bool relation_blocked = false;
+    uint8_t relation_victim = 0xFF;
     for (uint16_t id : ids) {
         auto it = g_hm_by_id.find(id);
         if (it == g_hm_by_id.end()) {
@@ -710,6 +715,8 @@ static void host_command(uint8_t from, net::Reader& r)
             const uint8_t victim = owner_of(target);
             if (victim < rivals::kMaxPlayers && !player_attack_allowed(from, victim)) {
                 g_cmds_rejected++;
+                relation_blocked = true;
+                relation_victim = victim;
                 g_last_cmd += " rejected: target player is not at war";
                 continue;
             }
@@ -723,6 +730,8 @@ static void host_command(uint8_t from, net::Reader& r)
             thiscall<void*>(a_DoAction, c, action, target, (void*)nullptr);
         g_cmds_done++;
     }
+    if (relation_blocked && C.notice)
+        C.notice(C.sess->name_of(from) + " cannot attack " + C.sess->name_of(relation_victim) + " while not at war");
 }
 
 // ---------------- guest: mirrors ----------------
