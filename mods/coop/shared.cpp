@@ -303,6 +303,20 @@ void on_message(net::Session& s, uint8_t type, uint8_t from, net::Reader& rd)
     for (auto& r : g_res) {
         if (r.id != id)
             continue;
+        if (r.own_budget_last && !own_budget(r) && s.role() == net::Role::Client) {
+            // A host total can arrive before this frame's tick. Preserve the guest's local balance
+            // before applying that total, or the merge would accidentally add the host's balance.
+            if (g_hold)
+                return;
+            double local = 0;
+            if (r.get(local)) {
+                r.led.reset();
+                r.led.pending = local;
+                r.synced = local;
+                r.have = true;
+                r.own_budget_last = false;
+            }
+        }
         if (own_budget(r))
             return; // a total or a change sent before the switch to rivals mode: not shared any more
         double cur;
