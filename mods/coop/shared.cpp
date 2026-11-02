@@ -109,6 +109,8 @@ struct Res {
     // state
     bool have = false;   // synced at least once in this session
     bool own_budget_last = false; // Tribe/Civ: merge the local balance on return from Rivals
+    bool own_allocation_pending = false; // a host split waits until the local stage resource exists
+    double own_allocation = 0;
     double synced = 0;   // value after the last sync (guest) / last broadcast (host)
     net::SharedLedger led; // guest: changes not sent yet / sent and not counted by the host yet
     double last_send = 0;
@@ -207,6 +209,8 @@ void on_session_end()
     for (auto& r : g_res) {
         r.have = false;
         r.own_budget_last = false;
+        r.own_allocation_pending = false;
+        r.own_allocation = 0;
         r.led.reset();
         r.acked.clear();
         r.ack_dirty = false;
@@ -235,6 +239,13 @@ void tick(net::Session& s, uint32_t mode, double now, bool elsewhere)
         double v;
         if (own_budget(r)) {
             if (r.mode != modes::kSpace && r.mode == mode && r.get(v)) {
+                if (r.own_allocation_pending) {
+                    r.set(r.own_allocation);
+                    double applied = 0;
+                    if (r.get(applied) && std::fabs(applied - r.own_allocation) < 1e-2)
+                        r.own_allocation_pending = false;
+                    r.get(v);
+                }
                 if (!r.own_budget_last && s.role() == net::Role::Host) {
                     // Split the shared starting balance evenly when this stage enters Rivals.
                     // The host keeps any remainder; every guest receives its own initial budget.
@@ -336,10 +347,10 @@ void on_message(net::Session& s, uint8_t type, uint8_t from, net::Reader& rd)
         for (auto& r : g_res) {
             if (r.id != id || r.mode == modes::kSpace || !own_budget(r))
                 continue;
-            r.set(v);
-            r.synced = v;
+            r.own_allocation = v;
+            r.own_allocation_pending = true;
             r.have = false;
-            r.own_budget_last = true;
+            r.own_budget_last = false;
             return;
         }
         return;
