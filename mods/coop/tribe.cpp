@@ -224,10 +224,7 @@ static std::vector<void*> g_local_tribe_of; // host tribe index -> local tribe
 
 static bool player_attack_allowed(uint8_t attacker, uint8_t target)
 {
-    if (rivals::current_stage_mode(rivals::Stage::Tribe) != rivals::StageMode::Rivals)
-        return true;
-    return attacker < rivals::kMaxPlayers && target < rivals::kMaxPlayers && attacker != target &&
-           rivals::current_relation(attacker, target) == rivals::Relation::War;
+    return rivals::allows_player_attack(attacker, target);
 }
 
 uint8_t owner_of(void* c)
