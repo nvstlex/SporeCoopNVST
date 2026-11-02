@@ -123,8 +123,8 @@ prototype survives a two-process test.
 
 * The current branch's per-player Tribe food and Civilization money are local-copy balances, not
   balances stored on independent native factions.
-* The generic player relation matrix is session state only; it does not currently affect NPC AI,
-  citizen combat or city capture.
+* The generic player relation matrix is session state only. Tribe player-vs-player attacks now
+  require War, but NPC AI, NPC diplomacy and city capture do not yet consult it.
 * The current city/member owner maps are still useful infrastructure and should be retained;
   they provide network identity, command validation and overlays after native faction ownership
   is introduced.
