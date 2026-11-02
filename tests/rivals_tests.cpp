@@ -45,6 +45,11 @@ static void test_player_combat_policy()
     CHECK(!rivals::allows_player_attack(s, 0, 0));
     CHECK(!rivals::allows_player_attack(s, 0, 4));
     CHECK(!rivals::allows_player_attack(s, 4, 0));
+    CHECK(rivals::allows_player_attack(s, rivals::Stage::Tribe, 0, 1)); // Together keeps vanilla combat
+    CHECK(s.set_stage_mode(rivals::Stage::Tribe, rivals::StageMode::Rivals));
+    CHECK(!rivals::allows_player_attack(s, rivals::Stage::Tribe, 0, 1)); // Neutral blocks in Rivals
+    CHECK(s.set_relation(0, 1, rivals::Relation::War));
+    CHECK(rivals::allows_player_attack(s, rivals::Stage::Tribe, 0, 1));
 }
 
 static void test_rivals_balance_merge_ledger()
