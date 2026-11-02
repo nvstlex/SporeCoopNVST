@@ -73,6 +73,14 @@ struct SessionState {
     }
 };
 
+// Player-vs-player combat is permitted only for an explicit War relation.
+// NPCs / unassigned owners are handled by the game rules, not this policy.
+inline bool allows_player_attack(const SessionState& state, uint8_t attacker, uint8_t target)
+{
+    return attacker < kMaxPlayers && target < kMaxPlayers && attacker != target &&
+           state.get_relation(attacker, target) == Relation::War;
+}
+
 // Implemented by coop.cpp: the authoritative table shared with stage modules.
 StageMode current_stage_mode(Stage stage);
 
