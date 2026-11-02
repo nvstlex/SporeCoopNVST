@@ -77,8 +77,10 @@ The first gameplay consumer of the shared relation table is now connected. In Tr
 when the stage setting is Rivals, CitizenAction 7 (Attack) against a tracked player-owned
 citizen is allowed only if the attacker and target have a War relation. Neutral and Ally
 relations block the attack. The host applies the same check to guest commands and to its own
-local selection before the original game action function is called. NPC citizens, unknown
-owners, non-attack actions and Together mode retain the existing game path.
+local selection before the original game action function is called. This filters orders only:
+all members still reference the same native `cTribe`, so the game may still treat them as one
+tribe and suppress actual PvP damage. NPC citizens, unknown owners, non-attack actions and
+Together mode retain the existing game path.
 
 The portable policy is covered by `test_player_combat_policy` in
 `tests/rivals_tests.cpp`. Runtime verification still needs a two-player Tribe world: verify
