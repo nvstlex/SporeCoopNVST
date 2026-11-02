@@ -71,15 +71,30 @@ must not be compared as identities across machines; use position/archetype/membe
 to correlate likely counterparts. The command is read-only: it does not create tribes,
 move citizens, or change the player-tribe pointer.
 
-## 3. Safe implementation order
+## 3. Tribe combat relation hook
+
+The first gameplay consumer of the shared relation table is now connected. In Tribe mode,
+when the stage setting is Rivals, CitizenAction 7 (Attack) against a tracked player-owned
+citizen is allowed only if the attacker and target have a War relation. Neutral and Ally
+relations block the attack. The host applies the same check to guest commands and to its own
+local selection before the original game action function is called. NPC citizens, unknown
+owners, non-attack actions and Together mode retain the existing game path.
+
+The portable policy is covered by `test_player_combat_policy` in
+`tests/rivals_tests.cpp`. Runtime verification still needs a two-player Tribe world: verify
+neutral/ally rejection, War acceptance in both directions, and that NPC attacks and Together
+mode are unchanged. This hook does not create separate native tribes and does not yet change
+NPC AI or NPC diplomacy.
+
+## 4. Safe implementation order
 
 Do not switch the lobby to offer a stage as fully playable Rivals until its native faction
 prototype survives a two-process test.
 
 ### Tribe prototype
 
-1. Add a host-only diagnostic that inventories every `cTribe`: object address, position,
-   member count, hut, archetype and whether it is the current player tribe.
+1. Use the read-only `coop.tribe factions` diagnostic on the host and a guest to inventory
+   every `cTribe`: object address, position, member count, hut, food, archetype and player marker.
 2. In a disposable test world, create one empty NPC tribe with `SpawnNpcTribe` at a
    preselected NPC village position. Do not move citizens or alter the player pointer yet.
 3. Verify that the new tribe appears in the game's tribe list, has a valid hut/food container,
@@ -104,7 +119,7 @@ prototype survives a two-process test.
 5. Verify how each guest's `GetPlayerCivilization` can point to its own nation. If this is not
    supported, do not advertise independent civilization gameplay.
 
-## 4. Current blockers and non-goals
+## 5. Current blockers and non-goals
 
 * The current branch's per-player Tribe food and Civilization money are local-copy balances, not
   balances stored on independent native factions.
@@ -118,7 +133,7 @@ prototype survives a two-process test.
 * Keep the current Together behaviour unchanged. Rivals-specific hooks must be gated by the
   selected stage mode and have a safe fallback when the prototype is unavailable.
 
-## 5. Decision
+## 6. Decision
 
 The next code milestone is **a diagnostic and disposable native-faction prototype**, not a
 premature implementation of the full stage. Tribe is the first candidate because the mod already
