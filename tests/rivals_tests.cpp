@@ -60,14 +60,22 @@ static void test_wire_roundtrip_and_validation()
     bad_bytes[1] = 99; // invalid stage mode
     net::Reader bad_mode(bad_bytes.data(), bad_bytes.size());
     CHECK(!rivals::read_state(bad_mode, decoded));
+    CHECK(decoded.stage_mode(rivals::Stage::Cell) == rivals::StageMode::Rivals); // failure is atomic
 
     bad_bytes = w.data;
     bad_bytes[6] = 99; // invalid player relation
     net::Reader bad_relation(bad_bytes.data(), bad_bytes.size());
     CHECK(!rivals::read_state(bad_relation, decoded));
+    CHECK(decoded.get_relation(1, 3) == rivals::Relation::War);
+
+    bad_bytes = w.data;
+    bad_bytes.push_back(0); // trailing bytes are not part of version 1
+    net::Reader trailing(bad_bytes.data(), bad_bytes.size());
+    CHECK(!rivals::read_state(trailing, decoded));
 
     net::Reader truncated(w.data.data(), w.size() - 1);
     CHECK(!rivals::read_state(truncated, decoded));
+    CHECK(decoded.get_relation(1, 3) == rivals::Relation::War);
 }
 
 int main()
