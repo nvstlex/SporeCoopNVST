@@ -245,7 +245,7 @@ static int host_index_of_city(void* c)
 static void* player_capital_city()
 {
     void* civ = player_civ();
-    if (!civ || !skg::readable(civ, 0xA0))
+    if (!civ || !skg::readable(civ, 0xA4))
         return nullptr;
     const auto cities = vec_of((uint8_t*)civ + 0x9C);
     return cities.empty() ? nullptr : cities.front();
@@ -2452,7 +2452,7 @@ std::string debug(const std::vector<std::string>& a)
         char line[256];
         for (size_t i = 0; i < civs.size() && i < 100; ++i) {
             void* civ = civs[i];
-            if (!civ || !game::object_alive(civ) || !skg::readable(civ, 0xD8))
+            if (!civ || !game::object_alive(civ) || !skg::readable(civ, 0xDC))
                 continue;
             const auto pol = pol_of(civ);
             const auto cities = vec_of((uint8_t*)civ + 0x9C);
