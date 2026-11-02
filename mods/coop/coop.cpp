@@ -4507,12 +4507,17 @@ void init_ui()
     a.can_edit_stage_modes = [] { return g_sess.role() == net::Role::Host && g_sess.connected(); };
     a.toggle_stage_mode = [](int stage) {
         if (g_sess.role() != net::Role::Host || stage < 0 || stage >= (int)rivals::kStageCount) return;
-        auto s = static_cast<rivals::Stage>(stage);
-        auto next = g_rivals_state.stage_mode(s) == rivals::StageMode::Rivals
-            ? rivals::StageMode::Together : rivals::StageMode::Rivals;
-        std::string err;
-        if (!rivals_apply_stage_mode(s, next, err))
-            feed("cannot switch stage mode: " + err);
+        H->run_outside_frame([](void* p) {
+            std::unique_ptr<std::function<void()>> fn((std::function<void()>*)p);
+            (*fn)();
+        }, new std::function<void()>([stage] {
+            auto s = static_cast<rivals::Stage>(stage);
+            auto next = g_rivals_state.stage_mode(s) == rivals::StageMode::Rivals
+                ? rivals::StageMode::Together : rivals::StageMode::Rivals;
+            std::string err;
+            if (!rivals_apply_stage_mode(s, next, err))
+                feed("cannot switch stage mode: " + err);
+        }));
     };
     a.say = [](const std::string& t) {
         if (support::chat_command(t)) // "/bug <text>" (docs/REPORTING.md#reporting-support)
@@ -5068,7 +5073,7 @@ extern "C" SK_EXPORT const SkModInfo* sporekit_mod_main(const SkHost* host, SkMo
                                    rel[(uint8_t)g_rivals_state.get_relation(players[i].id, players[j].id)]);
                        return 0;
                    },
-                   nullptr, SK_CMD_MAIN_THREAD);
+                   nullptr, SK_CMD_OUTSIDE_FRAME);
     teamplay::Ctx tc;
     tc.partners = partners;
     tc.notice = [](const std::string& t) { notice(t, -1); };
