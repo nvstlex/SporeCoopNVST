@@ -81,9 +81,15 @@ inline bool allows_player_attack(const SessionState& state, uint8_t attacker, ui
            state.get_relation(attacker, target) == Relation::War;
 }
 
+inline bool allows_player_attack(const SessionState& state, Stage stage, uint8_t attacker, uint8_t target)
+{
+    return state.stage_mode(stage) != StageMode::Rivals || allows_player_attack(state, attacker, target);
+}
+
 // Implemented by coop.cpp: the authoritative table shared with stage modules.
 StageMode current_stage_mode(Stage stage);
 Relation current_relation(uint8_t a, uint8_t b);
+bool allows_player_attack(uint8_t attacker, uint8_t target);
 
 // Fixed-size wire format: version, five stage modes, then the six unordered player pairs.
 // Decode into a temporary so malformed packets never partially mutate live session state.
