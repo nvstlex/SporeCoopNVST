@@ -224,6 +224,22 @@ static float g_body_size = 0; // the target size we wrote, to notice the game re
 
 static std::string nearest_partner(float max_dist, net::Vec3* where = nullptr, float* dist = nullptr, bool helper = false);
 
+static bool spawn_anchor(net::Vec3& at)
+{
+    // Guests use the host as a stable anchor. Choosing the nearest guest could make later
+    // joiners cluster around one another instead of getting a distinct slot around the host.
+    if (C.sess && C.sess->role() == net::Role::Client && C.host_pos && C.host_pos(at))
+        return true;
+    return !nearest_partner(1e9f, &at).empty();
+}
+
+static net::Vec3 spawn_for_me(const net::Vec3& anchor, float radius = 6.f)
+{
+    const uint8_t id = C.sess && C.sess->connected() ? C.sess->my_id() : 0;
+    const auto offset = cell_logic::player_spawn_offset(id, radius);
+    return {anchor.x + offset.x, anchor.y + offset.y, 0.f};
+}
+
 
 // "right next to": the cells (almost) touch
 static float revive_dist(uint8_t* a)
@@ -452,7 +468,13 @@ static void downed_tick(uint8_t* a, double now, double dt)
     g_downed = false;
     net::Vec3 at = g_down_pos;
     std::string partner = nearest_partner(1e9f, &at, nullptr, true);
-    stop_at(a, partner.empty() ? at : net::Vec3{at.x + 2.f, at.y + 1.f, 0.f});
+    if (C.sess && C.sess->role() == net::Role::Client) {
+        if (!spawn_anchor(at))
+            at = g_down_pos;
+        stop_at(a, spawn_for_me(at));
+    } else {
+        stop_at(a, partner.empty() ? at : net::Vec3{at.x + 2.f, at.y + 1.f, 0.f});
+    }
     F<uint8_t>(a, 0x04) = 1; // idle
     F<int>(a, kHp) = 6;
     g_invuln_until = now + 3.0;
@@ -2736,13 +2758,20 @@ static void join_after_load(double now)
     net::Vec3 at;
     float d = -1;
     // not during the hatch (the game's input lock after a load or a rebuild), not knocked out, and
-    // only once the host's state is here
-    if (F<uint8_t>(a, kDying) || g_downed || coop_ui::input_lock_now() > 0 || nearest_partner(1e9f, &at, &d).empty())
+    // only once the host's state is here. The host is the stable anchor for every guest's slot.
+    bool have_anchor = spawn_anchor(at);
+    if (have_anchor && C.host_pos && C.sess && C.sess->role() == net::Role::Client) {
+        if (uint8_t* host = C.puppets ? nullptr : nullptr) (void)host; // no local host avatar is required
+        d = net::dist(pos_of(a), at);
+    } else if (have_anchor) {
+        nearest_partner(1e9f, nullptr, &d);
+    }
+    if (F<uint8_t>(a, kDying) || g_downed || coop_ui::input_lock_now() > 0 || !have_anchor)
         return;
     g_join_since = -1;
-    if (d < 15.f)
+    if (d >= 0.f && d < 15.f)
         return;
-    g_join_to = {at.x + 2.5f, at.y + 1.f, 0.f};
+    g_join_to = spawn_for_me(at);
     stop_at(a, g_join_to);
     g_join_tries++;
     g_join_check = now + 3.0;
@@ -4812,8 +4841,8 @@ void join_partner()
 {
     uint8_t* a = in_cell() ? avatar() : nullptr;
     net::Vec3 at;
-    if (a && !nearest_partner(1e9f, &at).empty())
-        stop_at(a, {at.x + 2.5f, at.y + 1.f, 0.f});
+    if (a && spawn_anchor(at))
+        stop_at(a, spawn_for_me(at));
 }
 
 } // namespace cellsync
