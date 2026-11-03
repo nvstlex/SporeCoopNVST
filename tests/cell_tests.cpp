@@ -33,6 +33,9 @@ static void player_spawn_slots()
     CHECK(std::fabs(dist(host, p1) - 4.5f) < 0.001f);
     CHECK(std::fabs(dist(host, p2) - 4.5f) < 0.001f);
     CHECK(std::fabs(dist(host, p3) - 4.5f) < 0.001f);
+    // The same layout degrades cleanly to two and three connected players.
+    CHECK(dist(host, p1) > 4.f); // 2 players: host + guest 1
+    CHECK(dist(host, p2) > 4.f); // 3 players: host + guests 1..2
     CHECK(dist(p1, p2) > 7.7f);
     CHECK(dist(p2, p3) > 7.7f);
     CHECK(dist(p3, p1) > 7.7f);
