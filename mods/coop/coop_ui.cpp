@@ -917,7 +917,7 @@ static void refresh_rivals()
         const bool rivals = A.stage_mode && A.stage_mode(i) == 1;
         const char* mode = cooperative_only ? T("Co-op only", "Только кооператив")
                                              : (rivals ? T("Rivals", "Соперники") : T("Together", "Вместе"));
-        text(D.rivals_stage[i], std::string(T(names_en[i], names_ru[i])) + "  —  " + mode);
+        text(D.rivals_stage[i], std::string(T(names_en[i], names_ru[i])) + " - " + mode);
         text(D.rivals_toggle[i], rivals ? T("Rivals", "Соперники") : T("Together", "Вместе"));
         color(D.rivals_toggle[i], rivals ? kYellow : kGreen);
         show(D.rivals_toggle[i], editable && !cooperative_only);
