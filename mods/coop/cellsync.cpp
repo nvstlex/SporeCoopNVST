@@ -233,7 +233,7 @@ static bool spawn_anchor(net::Vec3& at)
     return !nearest_partner(1e9f, &at).empty();
 }
 
-static net::Vec3 spawn_for_me(const net::Vec3& anchor, float radius = 6.f)
+static net::Vec3 spawn_for_me(const net::Vec3& anchor, float radius = 4.5f)
 {
     const uint8_t id = C.sess && C.sess->connected() ? C.sess->my_id() : 0;
     const auto offset = cell_logic::player_spawn_offset(id, radius);
@@ -2756,22 +2756,16 @@ static void join_after_load(double now)
         return;
     }
     net::Vec3 at;
-    float d = -1;
     // not during the hatch (the game's input lock after a load or a rebuild), not knocked out, and
-    // only once the host's state is here. The host is the stable anchor for every guest's slot.
-    bool have_anchor = spawn_anchor(at);
-    if (have_anchor && C.host_pos && C.sess && C.sess->role() == net::Role::Client) {
-        if (uint8_t* host = C.puppets ? nullptr : nullptr) (void)host; // no local host avatar is required
-        d = net::dist(pos_of(a), at);
-    } else if (have_anchor) {
-        nearest_partner(1e9f, nullptr, &d);
-    }
+    // only once the host (or a fallback partner) is visible. All guests target their own stable slot.
+    const bool have_anchor = spawn_anchor(at);
     if (F<uint8_t>(a, kDying) || g_downed || coop_ui::input_lock_now() > 0 || !have_anchor)
         return;
     g_join_since = -1;
-    if (d >= 0.f && d < 15.f)
-        return;
     g_join_to = spawn_for_me(at);
+    const float d = net::dist(pos_of(a), g_join_to);
+    if (d < 3.f)
+        return;
     stop_at(a, g_join_to);
     g_join_tries++;
     g_join_check = now + 3.0;
