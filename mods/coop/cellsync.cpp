@@ -4797,8 +4797,12 @@ std::string status()
              g_tiles_shared, g_tiles_bg, g_tile_passes, g_tiles_kept, g_tile_resets, g_tiles_drained, g_tiles_full, g_tiles_flush, g_tiles_unshared, g_tiles_handed,
              G() ? F<uint32_t>(G(), 0x38 + 0xC) : 0, G() ? F<uint32_t>(G(), 0x38 + 0x18) : 0, (int)g_fix_budget, g_tiles_starved,
              (unsigned)g_starved.size(), g_tiles_fed, g_tiles_core, g_send_capped, g_mirror_capped, cells_live(), g_cells_peak, g_tile_level, g_nan_pop_skips, g_nan_heals);
-    char j[96];
-    snprintf(j, sizeof j, "cell_guest_fx: joins_after_load=%u bite_rings=%u\n", g_joins_load, g_bite_rings); // BUG-0352, BUG-0350
+    char j[192];
+    const uint8_t player_id = C.sess && C.sess->connected() ? C.sess->my_id() : 0xFF;
+    snprintf(j, sizeof j,
+             "cell_guest_fx: slot=%u join_active=%d join_pending=%d join_tries=%d target=(%.1f %.1f %.1f) joins_after_load=%u bite_rings=%u\n",
+             (unsigned)player_id, (int)g_join_client_active, (int)(g_join_since >= 0), g_join_tries,
+             g_join_to.x, g_join_to.y, g_join_to.z, g_joins_load, g_bite_rings); // BUG-0352, BUG-0350
     return b + std::string(d) + t + j;
 }
 
