@@ -4835,8 +4835,14 @@ void join_partner()
 {
     uint8_t* a = in_cell() ? avatar() : nullptr;
     net::Vec3 at;
-    if (a && spawn_anchor(at))
+    if (!a)
+        return;
+    if (C.sess && C.sess->role() == net::Role::Client && spawn_anchor(at)) {
         stop_at(a, spawn_for_me(at));
+    } else if (!nearest_partner(1e9f, &at).empty()) {
+        // Preserve the host's established small offset; only guests need separate stable slots.
+        stop_at(a, {at.x + 2.5f, at.y + 1.f, 0.f});
+    }
 }
 
 } // namespace cellsync
