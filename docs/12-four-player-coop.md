@@ -28,7 +28,9 @@ The session supports one host and up to three guests. Each stage has its own nat
 
 ### Cell
 
-cellsync.cpp already synchronizes the shared pool, remote cells, food and damage. The local player controls its avatar while remote cells are mirrored. This is the closest stage to the requested layout. Still verify 2–4 players together, including KO/revive, growth, level-up and host-away transitions.
+`cellsync.cpp` already synchronizes the shared pool, remote cells, food and damage. The local player controls its avatar while remote cells are mirrored. Guests now use deterministic player slots around the host: player 0 is the anchor, players 1–3 occupy a three-point ring, and the same slot is reused after avatar rebuild/load and after a knockout respawn. The host position is the only guest anchor; if it is unavailable, a guest keeps its previous position instead of drifting around another guest. The pure spawn-offset helper is covered by `tests/cell_tests.cpp`.
+
+Still verify 2–4 players in the actual game, including the first hatch, KO/revive, death respawn, growth, level-up and host-away transitions. The slot change does not yet prove every client sees the other three avatars correctly in all reload paths.
 
 ### Creature
 
