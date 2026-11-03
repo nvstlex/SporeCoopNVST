@@ -24,6 +24,7 @@ namespace cellsync {
 struct Ctx {
     net::Session* sess = nullptr;
     std::function<std::vector<std::pair<std::string, net::Vec3>>()> partners; // same place
+    std::function<bool(net::Vec3&)> host_pos; // guest: stable anchor for the 3 player spawn slots around host
     std::function<void(const std::string&)> notice;
     // a partner's meals added to the shared food here (the DNA cause ledger, dna_ledger.h): `from` the
     // guest whose meal the host applied, 0xFF on a guest (the host's total: some partner's)
