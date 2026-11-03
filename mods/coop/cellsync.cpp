@@ -226,10 +226,10 @@ static std::string nearest_partner(float max_dist, net::Vec3* where = nullptr, f
 
 static bool spawn_anchor(net::Vec3& at)
 {
-    // Guests use the host as a stable anchor. Choosing the nearest guest could make later
-    // joiners cluster around one another instead of getting a distinct slot around the host.
-    if (C.sess && C.sess->role() == net::Role::Client && C.host_pos && C.host_pos(at))
-        return true;
+    // Every guest's slot is relative to player 0 (the host), never to whichever guest happens
+    // to be closest. If the host is away, keep the previous position rather than drifting slots.
+    if (C.sess && C.sess->role() == net::Role::Client)
+        return C.host_pos && C.host_pos(at);
     return !nearest_partner(1e9f, &at).empty();
 }
 
@@ -237,7 +237,7 @@ static net::Vec3 spawn_for_me(const net::Vec3& anchor, float radius = 4.5f)
 {
     const uint8_t id = C.sess && C.sess->connected() ? C.sess->my_id() : 0;
     const auto offset = cell_logic::player_spawn_offset(id, radius);
-    return {anchor.x + offset.x, anchor.y + offset.y, 0.f};
+    return {anchor.x + offset.x, anchor.y + offset.y, anchor.z};
 }
 
 
