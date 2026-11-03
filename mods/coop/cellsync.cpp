@@ -2732,6 +2732,7 @@ static double g_join_since = -1;  // when that avatar appeared (-1: decided)
 static double g_join_check = -1;  // when to check that the move held
 static net::Vec3 g_join_to;       // where it was put
 static int g_join_tries;
+static bool g_join_client_active; // a fresh guest session / Cell-stage entry still needs its first placement
 static uint32_t g_joins_load;     // tests: guest moved next to the host after a new avatar
 static void join_after_load(double now)
 {
@@ -2776,6 +2777,15 @@ static void join_after_load(double now)
 
 static void guest_tick(double now)
 {
+    if (!g_join_client_active) {
+        // The local cell may already exist when the player joins. Do not wait for an avatar-index
+        // change: schedule the same stable host-relative slot used by post-load and KO respawns.
+        g_join_client_active = true;
+        g_join_avatar = UINT32_MAX;
+        g_join_since = now;
+        g_join_check = -1;
+        g_join_tries = 0;
+    }
     join_after_load(now);
     flush_food();
     own_probe("guest tick");
@@ -3109,6 +3119,8 @@ void tick(double now)
 {
     static bool was_in_cell;
     bool cell = in_cell();
+    if (!cell)
+        g_join_client_active = false; // re-entering Cell in the same session also gets a fresh placement
     if (!cell && (was_in_cell || !g_mirrors.empty()) && g_fix_forget) {
         if (was_in_cell)
             reset_knockout(); // no avatar any more: only our state is reset
@@ -3393,6 +3405,10 @@ void on_message(uint8_t type, uint8_t from, net::Reader& r)
 
 void on_session_end()
 {
+    g_join_client_active = false;
+    g_join_since = -1;
+    g_join_check = -1;
+    g_join_tries = 0;
     g_kodrop_until = 0;
     g_test_away = false;
     if (g_fix_koreset)
