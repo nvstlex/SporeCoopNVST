@@ -1,4 +1,6 @@
-# 11. Rivals: reverse-engineering findings
+# 11. Native faction reverse-engineering findings
+
+> **Updated project direction (2026-11-03):** This research is required for the four-player co-op target in [12-four-player-coop.md](12-four-player-coop.md). Each player needs a real native Tribe/Civilization while remaining on the same team. The older PvP language is legacy; native ownership, registration, persistence and local-player pointers are the relevant engineering problems.
 
 Status: research for the next implementation phase. Based on the existing co-op code and
 `docs/re/tribe.md` / `docs/re/civ.md`. This document separates verified existing behaviour

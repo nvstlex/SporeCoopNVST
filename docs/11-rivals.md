@@ -1,3 +1,5 @@
+> **Updated project direction (2026-11-03):** The PvP Rivals concept below is legacy design, not the current NVST COOP target. The target is four-player co-op with stage-specific layouts: individual cells, one shared nest, separate player tribes, separate player civilizations, and four home planets in one starting solar system. See [12-four-player-coop.md](12-four-player-coop.md). Retain useful networking/ownership infrastructure, but do not treat player war settings as the finished game.
+
 # 11. Rivals: own bases in one world (design)
 
 Status: **design with an initial session-state implementation** (decided with the project owner, 2026-10-25; implementation work started 2026-11-03). Chapter 9 is

@@ -22,11 +22,20 @@ static void test_stage_modes()
     CHECK(!s.set_stage_mode(rivals::Stage::Tribe, static_cast<rivals::StageMode>(99)));
 }
 
+static void test_stage_layouts()
+{
+    CHECK(rivals::stage_layout(rivals::Stage::Cell) == rivals::StageLayout::PlayerCells);
+    CHECK(rivals::stage_layout(rivals::Stage::Creature) == rivals::StageLayout::SharedNest);
+    CHECK(rivals::stage_layout(rivals::Stage::Tribe) == rivals::StageLayout::PlayerTribes);
+    CHECK(rivals::stage_layout(rivals::Stage::Civilization) == rivals::StageLayout::PlayerCivilizations);
+    CHECK(rivals::stage_layout(rivals::Stage::Space) == rivals::StageLayout::SharedSystemHomePlanets);
+}
+
 static void test_coop_city_assignment()
 {
     const std::vector<uint8_t> players{0, 1, 2, 3};
-    CHECK(rivals::initial_city_owner(0, 1, players) == rivals::kSharedCityOwner);
-    CHECK(rivals::initial_city_owner(0, 2, players) == rivals::kSharedCityOwner);
+    CHECK(rivals::initial_city_owner(0, 1, players) == 0);
+    CHECK(rivals::initial_city_owner(0, 2, players) == 0);
     CHECK(rivals::initial_city_owner(1, 2, players) == 1);
     CHECK(rivals::initial_city_owner(0, 4, players) == 0);
     CHECK(rivals::initial_city_owner(1, 4, players) == 1);
@@ -70,14 +79,14 @@ static void test_player_combat_policy()
     CHECK(rivals::allows_player_attack(s, rivals::Stage::Tribe, 0, 1)); // Together preserves vanilla
     CHECK(rivals::allows_player_attack(s, rivals::Stage::Civilization, 0, 1));
     CHECK(s.set_stage_mode(rivals::Stage::Tribe, rivals::StageMode::Rivals));
-    CHECK(s.set_stage_mode(rivals::Stage::Civilization, rivals::StageMode::Rivals));
-    CHECK(!rivals::allows_player_attack(s, rivals::Stage::Tribe, 0, 1)); // Neutral blocks
-    CHECK(!rivals::allows_player_attack(s, rivals::Stage::Civilization, 0, 1));
+    CHECK(!s.set_stage_mode(rivals::Stage::Civilization, rivals::StageMode::Rivals));
+    CHECK(!rivals::allows_player_attack(s, rivals::Stage::Tribe, 0, 1)); // Neutral blocks in legacy Tribe Rivals
+    CHECK(rivals::allows_player_attack(s, rivals::Stage::Civilization, 0, 1)); // Civ keeps NPC orders on co-op path
     CHECK(s.set_relation(0, 1, rivals::Relation::Ally));
-    CHECK(!rivals::allows_player_attack(s, rivals::Stage::Tribe, 0, 1)); // Ally blocks
-    CHECK(!rivals::allows_player_attack(s, rivals::Stage::Civilization, 0, 1));
+    CHECK(!rivals::allows_player_attack(s, rivals::Stage::Tribe, 0, 1)); // Ally blocks in legacy Tribe Rivals
+    CHECK(rivals::allows_player_attack(s, rivals::Stage::Civilization, 0, 1));
     CHECK(s.set_relation(0, 1, rivals::Relation::War));
-    CHECK(rivals::allows_player_attack(s, rivals::Stage::Tribe, 0, 1)); // War permits
+    CHECK(rivals::allows_player_attack(s, rivals::Stage::Tribe, 0, 1)); // legacy War permits
     CHECK(rivals::allows_player_attack(s, rivals::Stage::Civilization, 0, 1));
 }
 
@@ -160,6 +169,7 @@ static void test_wire_roundtrip_and_validation()
 int main()
 {
     test_stage_modes();
+    test_stage_layouts();
     test_coop_city_assignment();
     test_relations();
     test_player_combat_policy();

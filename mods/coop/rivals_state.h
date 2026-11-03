@@ -15,6 +15,27 @@ constexpr uint8_t kMaxPlayers = 4;
 constexpr uint8_t kStageCount = 5;
 
 enum class Stage : uint8_t { Cell = 0, Creature, Tribe, Civilization, Space };
+
+// Independent player objects are stage-specific. This layout is cooperative, not a PvP mode.
+enum class StageLayout : uint8_t {
+    PlayerCells = 0,          // one controllable cell per player in one pool
+    SharedNest,               // one nest for all participating player species
+    PlayerTribes,             // one native cTribe per player
+    PlayerCivilizations,      // one native cCivilization and start city per player
+    SharedSystemHomePlanets   // one home planet per player in one solar system
+};
+constexpr StageLayout stage_layout(Stage stage)
+{
+    switch (stage) {
+    case Stage::Cell: return StageLayout::PlayerCells;
+    case Stage::Creature: return StageLayout::SharedNest;
+    case Stage::Tribe: return StageLayout::PlayerTribes;
+    case Stage::Civilization: return StageLayout::PlayerCivilizations;
+    case Stage::Space: return StageLayout::SharedSystemHomePlanets;
+    }
+    return StageLayout::PlayerCells;
+}
+
 enum class StageMode : uint8_t { Together = 0, Rivals = 1 };
 enum class Relation : uint8_t { Neutral = 0, Ally = 1, War = 2 };
 
@@ -76,16 +97,16 @@ struct SessionState {
     }
 };
 
-// Owner assignment for the initial cities of the shared Civilization nation. City 0 is
-// the capital; it stays shared until the team has at least one city per player. Further
-// cities are distributed round-robin in the sorted roster order (host is player 0).
+// Legacy sentinel retained for old city snapshots. New sessions assign each existing
+// city to one player; the capital is no longer silently shared by the whole party.
 constexpr uint8_t kSharedCityOwner = 0xFD;
+
+// First four cities map to players 0..3; later cities cycle through the connected roster.
+// Missing starting cities must be created through the native game path by the stage adapter.
 inline uint8_t initial_city_owner(size_t city_index, size_t city_count, const std::vector<uint8_t>& players)
 {
     if (players.empty() || city_index >= city_count)
         return 0xFF;
-    if (city_index == 0)
-        return city_count < players.size() ? kSharedCityOwner : players[0];
     return players[city_index % players.size()];
 }
 
