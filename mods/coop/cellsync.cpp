@@ -469,9 +469,10 @@ static void downed_tick(uint8_t* a, double now, double dt)
     net::Vec3 at = g_down_pos;
     std::string partner = nearest_partner(1e9f, &at, nullptr, true);
     if (C.sess && C.sess->role() == net::Role::Client) {
-        if (!spawn_anchor(at))
-            at = g_down_pos;
-        stop_at(a, spawn_for_me(at));
+        if (spawn_anchor(at))
+            stop_at(a, spawn_for_me(at));
+        else
+            stop_at(a, g_down_pos); // no host anchor: do not accumulate an offset from the last KO position
     } else {
         stop_at(a, partner.empty() ? at : net::Vec3{at.x + 2.f, at.y + 1.f, 0.f});
     }
@@ -4837,10 +4838,13 @@ void join_partner()
     net::Vec3 at;
     if (!a)
         return;
-    if (C.sess && C.sess->role() == net::Role::Client && spawn_anchor(at)) {
-        stop_at(a, spawn_for_me(at));
-    } else if (!nearest_partner(1e9f, &at).empty()) {
-        // Preserve the host's established small offset; only guests need separate stable slots.
+    if (C.sess && C.sess->role() == net::Role::Client) {
+        if (spawn_anchor(at))
+            stop_at(a, spawn_for_me(at));
+        return; // guests never fall back to another guest as their anchor
+    }
+    if (!nearest_partner(1e9f, &at).empty()) {
+        // Preserve the host's established small offset; only guests use stable player slots.
         stop_at(a, {at.x + 2.5f, at.y + 1.f, 0.f});
     }
 }
