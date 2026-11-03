@@ -19,6 +19,7 @@
 #include "net/validate.h"
 #include "sporekit_game.hpp"
 #include "fixes.h"
+#include "rivals_state.h"
 
 using skg::thiscall;
 using skg::vcall;
@@ -39,7 +40,7 @@ constexpr uintptr_t kVSpatial = 0x34, kVPos = 0x38, kVRot = 0x44, kVSelected = 0
 constexpr uintptr_t kCityPos = 0x124, kCitySpecialty = 0x540, kCitySlots = 0x43C,
                     kCityCapture = 0x748, // + 4: capturing political id
                     kCityBuildings = 0x340, kBuildingState = 0x120 + 0x34; // combatant state, 2 = destroyed
-constexpr uint8_t kShared = 0xFD; // a city everybody may use (the capital while cities < players)
+constexpr uint8_t kShared = rivals::kSharedCityOwner; // a city everybody may use (the capital while cities < players)
 constexpr uintptr_t kCivCities = 0x9C;
 constexpr uint32_t kMsgActivated = 0x287259F6, kBtnLand = 0x62D6902, kBtnWater = 0x62D6908, kBtnAir = 0x62D690F,
                    kBtnPlanner = 0x62D5618, kBuildingType = 0x0E9CB8BA;
@@ -241,6 +242,9 @@ static int host_index_of_city(void* c)
     return -1;
 }
 
+// Civilization is cooperative: player-owned cities and vehicles are teammates.
+// Attack orders against NPC civilizations follow the game's normal rules.
+
 static void* nearest_player_city(const net::Vec3& p, uint8_t* owner = nullptr)
 {
     void* best = nullptr;
@@ -343,8 +347,8 @@ static int SK_THISCALL h_SetOrder(void* v, void* target, int type, int flag)
     else if (!g_applying && is_guest() && game::mode_id() == modes::kCiv) {
         auto it = g_gv_of.find(v);
         if (it != g_gv_of.end()) {
-            // a mirror of another player's or nation's vehicle: the guest's own civ AI orders the
-            // other nations' vehicles every few frames (hundreds of rejected commands a minute)
+            // Every connected player is on the same side: own vehicles may target NPCs
+            // and cooperate against every NPC civilization.
             if (g_gv[it->second].owner != C.sess->my_id()) {
                 g_orders_dropped++;
                 return 0;
@@ -1002,22 +1006,21 @@ static void host_assign_cities(const std::vector<uint8_t>& players)
     g_split_for = players;
     if (cities.empty())
         return;
-    // the first city of the player civ is the capital: the host's; the others in turns
+    // the first city is the capital; it is shared until there are enough cities for every player.
     net::Vec3 cap = city_pos(cities[0]);
     std::sort(cities.begin() + 1, cities.end(),
               [&](void* a, void* b) { return net::dist(city_pos(a), cap) < net::dist(city_pos(b), cap); });
-    // fewer cities than players: the capital is shared so that everybody can play from the start
-    bool shared = cities.size() < players.size();
+    // Fewer cities than players: the capital is shared so everybody can play from the start.
+    const bool shared = cities.size() < players.size();
     if (shared != (g_city_owner.count(cities[0]) && g_city_owner[cities[0]] == kShared))
         resplit = true;
-    size_t k = 0;
     for (size_t i = 0; i < cities.size(); i++) {
         if (!resplit && g_city_owner.count(cities[i]))
             continue;
         if (g_city_gifted.count(cities[i]) && g_city_owner.count(cities[i]) &&
             std::find(players.begin(), players.end(), g_city_owner[cities[i]]) != players.end())
             continue; // a gift stays with its new owner while that player is here
-        g_city_owner[cities[i]] = i == 0 ? (shared ? kShared : 0) : players[(1 + k++) % players.size()];
+        g_city_owner[cities[i]] = rivals::initial_city_owner(i, cities.size(), players);
     }
 }
 
@@ -2389,6 +2392,30 @@ std::string debug(const std::vector<std::string>& a)
         snprintf(b, sizeof b, "ai spawns blocked %u\n", g_ai_spawns_blocked);
         return out + b;
     }
+    if (!a.empty() && a[0] == "factions") { // read-only inventory of native civilizations (Rivals research)
+        if (!g_ok || game::mode_id() != modes::kCiv || !nm() || !a_GetAllCivs || !a_GetMoney)
+            return "enter Civilization stage first (required symbols unavailable)";
+        const auto me_civ = player_civ();
+        const auto civs = vec_of(thiscall<void*>(a_GetAllCivs, nm()));
+        std::string out;
+        char line[256];
+        for (size_t i = 0; i < civs.size() && i < 100; ++i) {
+            void* civ = civs[i];
+            if (!civ || !game::object_alive(civ) || !skg::readable(civ, 0xDC))
+                continue;
+            const auto pol = pol_of(civ);
+            const auto cities = vec_of((uint8_t*)civ + 0x9C);
+            const auto vehicles = vec_of((uint8_t*)civ + 0xB0);
+            const auto money = thiscall<float>(a_GetMoney, civ);
+            const auto culture = F<void*>(civ, 0x6C);
+            snprintf(line, sizeof line,
+                     "civ %zu %p pol=%08X%s player_flag=%u money=%.1f cities=%u vehicles=%u culture=%p\n",
+                     i, civ, pol, civ == me_civ ? " PLAYER" : "", (unsigned)F<uint8_t>(civ, 0x89),
+                     money, (unsigned)cities.size(), (unsigned)vehicles.size(), culture);
+            out += line;
+        }
+        return out.empty() ? "no readable civilizations\n" : out;
+    }
     if (!a.empty() && a[0] == "tables") { // sizes of the pointer tables (tests: BUG-0040, BUG-0059)
         char b[320];
         snprintf(b, sizeof b,
@@ -2640,7 +2667,7 @@ std::string debug(const std::vector<std::string>& a)
         }
         return out;
     }
-    return "usage: coop.civ select <id> <0|1> | move <id> <x> <y> <z> | buy <city> <0 land|1 water|2 air> | "
+    return "usage: coop.civ factions | select <id> <0|1> | move <id> <x> <y> <z> | buy <city> <0 land|1 water|2 air> | "
            "build <city> <house|factory|fun> | slots <city>";
 }
 

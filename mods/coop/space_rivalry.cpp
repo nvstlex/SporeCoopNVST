@@ -392,6 +392,11 @@ static std::string request(uint8_t action, uint8_t target)
     return "";
 }
 
+std::string set_enabled(bool on)
+{
+    return request(on ? A_RIVALS : A_ALLIES, 0);
+}
+
 // ---------------- everybody ----------------
 static void apply_pending_money()
 {

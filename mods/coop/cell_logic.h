@@ -13,6 +13,29 @@
 
 namespace cell_logic {
 
+// Four-player Cell spawn layout: host at the anchor, the three guests on a stable ring around it.
+// Player ids are allocated by the co-op session (0 = host, 1..3 = guests). The same offset is
+// used after a load and after a knockout, so two guests do not hatch into the same coordinates.
+struct SpawnOffset {
+    float x = 0;
+    float y = 0;
+};
+inline SpawnOffset player_spawn_offset(uint8_t player, float radius = 6.f)
+{
+    if (!std::isfinite(radius) || radius < 0.f)
+        radius = 6.f;
+    radius = std::clamp(radius, 3.f, 20.f);
+    constexpr float kHalf = 0.5f;
+    constexpr float kSin60 = 0.8660254037844386f;
+    switch (player) {
+    case 0: return {0.f, 0.f};
+    case 1: return {radius, 0.f};
+    case 2: return {-radius * kHalf, radius * kSin60};
+    case 3: return {-radius * kHalf, -radius * kSin60};
+    default: return {0.f, 0.f};
+    }
+}
+
 // BUG-0083: a cell pool slot is live only in [0, highWater) and inside the allocation [0, capacity).
 // The old test (`slot > highWater`) let slot == highWater through, one object past the used range.
 inline bool slot_in_pool(uint32_t slot, uint32_t high_water, uint32_t capacity, bool fix)

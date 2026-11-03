@@ -9,6 +9,7 @@
 #include "space_ext.h"
 #include "sporekit_game.hpp"
 #include "fixes.h"
+#include "rivals_state.h"
 
 namespace shared {
 
@@ -107,6 +108,7 @@ struct Res {
     void (*set)(double);
     // state
     bool have = false;   // synced at least once in this session
+    bool own_budget_last = false; // Tribe/Civ: merge the local balance on return from Rivals
     double synced = 0;   // value after the last sync (guest) / last broadcast (host)
     net::SharedLedger led; // guest: changes not sent yet / sent and not counted by the host yet
     double last_send = 0;
@@ -155,8 +157,18 @@ static Res g_res[] = {
 
 static uint32_t g_mode; // the game mode of the last tick: status / debug_add use its resources
 
-// rivals mode (space_rivalry.cpp): every player has its own Space budget, nothing is shared
-static bool own_budget(const Res& r) { return r.mode == modes::kSpace && spaceext::rivals(); }
+// Tribe/Civ Rivals economies are local to each player's game copy. Space keeps its dedicated
+// ledger and transition logic in space_rivalry.cpp.
+static bool own_budget(const Res& r)
+{
+    if (r.mode == modes::kSpace)
+        return spaceext::rivals();
+    if (r.mode == modes::kTribe)
+        return rivals::current_stage_mode(rivals::Stage::Tribe) == rivals::StageMode::Rivals;
+    if (r.mode == modes::kCiv)
+        return rivals::current_stage_mode(rivals::Stage::Civilization) == rivals::StageMode::Rivals;
+    return false;
+}
 
 void init(const SkHost* host, SkMod* mod)
 {
@@ -182,6 +194,7 @@ void on_session_end()
         return;
     for (auto& r : g_res) {
         r.have = false;
+        r.own_budget_last = false;
         r.led.reset();
         r.acked.clear();
         r.ack_dirty = false;
@@ -208,7 +221,10 @@ void tick(net::Session& s, uint32_t mode, double now, bool elsewhere)
     }
     for (auto& r : g_res) {
         double v;
-        if (own_budget(r)) { // paused: unsent changes stay with the player (space_rivalry.cpp splits)
+        if (own_budget(r)) {
+            // Each game copy keeps its own balance. Preserve any local pending changes on entry.
+            if (r.mode != modes::kSpace && r.mode == mode && r.get(v))
+                r.own_budget_last = true;
             r.have = false;
             r.led.reset();
             continue;
@@ -221,6 +237,19 @@ void tick(net::Session& s, uint32_t mode, double now, bool elsewhere)
             r.have = false;
             r.led.pause();
             continue;
+        }
+        if (r.own_budget_last) {
+            // Returning from a Tribe/Civ Rivals stage merges this player's complete local balance
+            // into the host's total exactly once. Space has its own merge logic in space_rivalry.cpp.
+            r.own_budget_last = false;
+            r.led.reset();
+            if (s.role() == net::Role::Client) {
+                r.led.pending = v;
+                r.synced = v;
+                r.have = true;
+            } else {
+                r.have = false; // host keeps its own balance and broadcasts it as the new total
+            }
         }
         if (s.role() == net::Role::Host) {
             // broadcast the total when it changed (and once per 2 s as a safety net)
@@ -275,6 +304,20 @@ void on_message(net::Session& s, uint8_t type, uint8_t from, net::Reader& rd)
     for (auto& r : g_res) {
         if (r.id != id)
             continue;
+        if (r.own_budget_last && !own_budget(r) && s.role() == net::Role::Client) {
+            // A host total can arrive before this frame's tick. Preserve the guest's local balance
+            // before applying that total, or the merge would accidentally add the host's balance.
+            if (g_hold)
+                return;
+            double local = 0;
+            if (r.get(local)) {
+                r.led.reset();
+                r.led.pending = local;
+                r.synced = local;
+                r.have = true;
+                r.own_budget_last = false;
+            }
+        }
         if (own_budget(r))
             return; // a total or a change sent before the switch to rivals mode: not shared any more
         double cur;

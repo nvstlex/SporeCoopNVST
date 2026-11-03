@@ -224,6 +224,22 @@ static float g_body_size = 0; // the target size we wrote, to notice the game re
 
 static std::string nearest_partner(float max_dist, net::Vec3* where = nullptr, float* dist = nullptr, bool helper = false);
 
+static bool spawn_anchor(net::Vec3& at)
+{
+    // Every guest's slot is relative to player 0 (the host), never to whichever guest happens
+    // to be closest. If the host is away, keep the previous position rather than drifting slots.
+    if (C.sess && C.sess->role() == net::Role::Client)
+        return C.host_pos && C.host_pos(at);
+    return !nearest_partner(1e9f, &at).empty();
+}
+
+static net::Vec3 spawn_for_me(const net::Vec3& anchor, float radius = 4.5f)
+{
+    const uint8_t id = C.sess && C.sess->connected() ? C.sess->my_id() : 0;
+    const auto offset = cell_logic::player_spawn_offset(id, radius);
+    return {anchor.x + offset.x, anchor.y + offset.y, anchor.z};
+}
+
 
 // "right next to": the cells (almost) touch
 static float revive_dist(uint8_t* a)
@@ -452,7 +468,14 @@ static void downed_tick(uint8_t* a, double now, double dt)
     g_downed = false;
     net::Vec3 at = g_down_pos;
     std::string partner = nearest_partner(1e9f, &at, nullptr, true);
-    stop_at(a, partner.empty() ? at : net::Vec3{at.x + 2.f, at.y + 1.f, 0.f});
+    if (C.sess && C.sess->role() == net::Role::Client) {
+        if (spawn_anchor(at))
+            stop_at(a, spawn_for_me(at));
+        else
+            stop_at(a, g_down_pos); // no host anchor: do not accumulate an offset from the last KO position
+    } else {
+        stop_at(a, partner.empty() ? at : net::Vec3{at.x + 2.f, at.y + 1.f, 0.f});
+    }
     F<uint8_t>(a, 0x04) = 1; // idle
     F<int>(a, kHp) = 6;
     g_invuln_until = now + 3.0;
@@ -2709,6 +2732,7 @@ static double g_join_since = -1;  // when that avatar appeared (-1: decided)
 static double g_join_check = -1;  // when to check that the move held
 static net::Vec3 g_join_to;       // where it was put
 static int g_join_tries;
+static bool g_join_client_active; // a fresh guest session / Cell-stage entry still needs its first placement
 static uint32_t g_joins_load;     // tests: guest moved next to the host after a new avatar
 static void join_after_load(double now)
 {
@@ -2734,15 +2758,16 @@ static void join_after_load(double now)
         return;
     }
     net::Vec3 at;
-    float d = -1;
     // not during the hatch (the game's input lock after a load or a rebuild), not knocked out, and
-    // only once the host's state is here
-    if (F<uint8_t>(a, kDying) || g_downed || coop_ui::input_lock_now() > 0 || nearest_partner(1e9f, &at, &d).empty())
+    // only once the host (or a fallback partner) is visible. All guests target their own stable slot.
+    const bool have_anchor = spawn_anchor(at);
+    if (F<uint8_t>(a, kDying) || g_downed || coop_ui::input_lock_now() > 0 || !have_anchor)
         return;
     g_join_since = -1;
-    if (d < 15.f)
+    g_join_to = spawn_for_me(at);
+    const float d = net::dist(pos_of(a), g_join_to);
+    if (d < 3.f)
         return;
-    g_join_to = {at.x + 2.5f, at.y + 1.f, 0.f};
     stop_at(a, g_join_to);
     g_join_tries++;
     g_join_check = now + 3.0;
@@ -2752,6 +2777,15 @@ static void join_after_load(double now)
 
 static void guest_tick(double now)
 {
+    if (!g_join_client_active) {
+        // The local cell may already exist when the player joins. Do not wait for an avatar-index
+        // change: schedule the same stable host-relative slot used by post-load and KO respawns.
+        g_join_client_active = true;
+        g_join_avatar = UINT32_MAX;
+        g_join_since = now;
+        g_join_check = -1;
+        g_join_tries = 0;
+    }
     join_after_load(now);
     flush_food();
     own_probe("guest tick");
@@ -3085,6 +3119,8 @@ void tick(double now)
 {
     static bool was_in_cell;
     bool cell = in_cell();
+    if (!cell)
+        g_join_client_active = false; // re-entering Cell in the same session also gets a fresh placement
     if (!cell && (was_in_cell || !g_mirrors.empty()) && g_fix_forget) {
         if (was_in_cell)
             reset_knockout(); // no avatar any more: only our state is reset
@@ -3369,6 +3405,10 @@ void on_message(uint8_t type, uint8_t from, net::Reader& r)
 
 void on_session_end()
 {
+    g_join_client_active = false;
+    g_join_since = -1;
+    g_join_check = -1;
+    g_join_tries = 0;
     g_kodrop_until = 0;
     g_test_away = false;
     if (g_fix_koreset)
@@ -4757,8 +4797,12 @@ std::string status()
              g_tiles_shared, g_tiles_bg, g_tile_passes, g_tiles_kept, g_tile_resets, g_tiles_drained, g_tiles_full, g_tiles_flush, g_tiles_unshared, g_tiles_handed,
              G() ? F<uint32_t>(G(), 0x38 + 0xC) : 0, G() ? F<uint32_t>(G(), 0x38 + 0x18) : 0, (int)g_fix_budget, g_tiles_starved,
              (unsigned)g_starved.size(), g_tiles_fed, g_tiles_core, g_send_capped, g_mirror_capped, cells_live(), g_cells_peak, g_tile_level, g_nan_pop_skips, g_nan_heals);
-    char j[96];
-    snprintf(j, sizeof j, "cell_guest_fx: joins_after_load=%u bite_rings=%u\n", g_joins_load, g_bite_rings); // BUG-0352, BUG-0350
+    char j[192];
+    const uint8_t player_id = C.sess && C.sess->connected() ? C.sess->my_id() : 0xFF;
+    snprintf(j, sizeof j,
+             "cell_guest_fx: slot=%u join_active=%d join_pending=%d join_tries=%d target=(%.1f %.1f %.1f) joins_after_load=%u bite_rings=%u\n",
+             (unsigned)player_id, (int)g_join_client_active, (int)(g_join_since >= 0), g_join_tries,
+             g_join_to.x, g_join_to.y, g_join_to.z, g_joins_load, g_bite_rings); // BUG-0352, BUG-0350
     return b + std::string(d) + t + j;
 }
 
@@ -4812,8 +4856,17 @@ void join_partner()
 {
     uint8_t* a = in_cell() ? avatar() : nullptr;
     net::Vec3 at;
-    if (a && !nearest_partner(1e9f, &at).empty())
+    if (!a)
+        return;
+    if (C.sess && C.sess->role() == net::Role::Client) {
+        if (spawn_anchor(at))
+            stop_at(a, spawn_for_me(at));
+        return; // guests never fall back to another guest as their anchor
+    }
+    if (!nearest_partner(1e9f, &at).empty()) {
+        // Preserve the host's established small offset; only guests use stable player slots.
         stop_at(a, {at.x + 2.5f, at.y + 1.f, 0.f});
+    }
 }
 
 } // namespace cellsync

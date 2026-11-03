@@ -55,6 +55,7 @@ constexpr uint32_t kGold = 0xFFFFCC4D, kWhite = 0xFFFFFFFF, kDim = 0xFF9DB8CC, k
 constexpr float kW = 760, kH = 600; // 560 + a footer row (version, "Report a problem")
 constexpr int kSpaceRows = 12;
 static bool g_space_page; // the lobby shows the Space page instead
+static bool g_rivals_page; // per-stage Together / Rivals settings
 static int g_lan_first;   // the first game on the network listed (pages of three, BUG-0183)
 bool g_lan_pages_fix = true; // `coop.corefix lan_pages 0`: only the first three games, no "More" (BUG-0183)
 COOP_FIX("core.lan_pages", "BUG-0183", g_lan_pages_fix, "ui: every network game is listed, with More pages");
@@ -244,6 +245,10 @@ struct Dialog {
     Win chat_up = nullptr, chat_down = nullptr;
     Win creation = nullptr, creation_prev = nullptr, creation_next = nullptr, give_btn = nullptr, give_next = nullptr, jump_btn = nullptr;
     Win space_btn = nullptr; // lobby -> the Space page (Space stage only)
+    Win rivals_btn = nullptr;
+    std::vector<Win> page_rivals;
+    Win rivals_title = nullptr, rivals_back = nullptr;
+    Win rivals_stage[5] = {}, rivals_toggle[5] = {};
     // Space page: the rows of the space features (space_ext.h)
     std::vector<Win> page_space;
     Win space_title = nullptr, space_back = nullptr, space_prev = nullptr, space_next = nullptr, space_pageno = nullptr;
@@ -664,6 +669,11 @@ static void build_dialog()
         g_space_page = true;
         g_dirty = true;
     });
+    D.rivals_btn = add_button(L, "rivals", {400, 66, 565, 98}, T("Stage modes >", "Режимы этапов >"), [] {
+        g_space_page = false;
+        g_rivals_page = true;
+        g_dirty = true;
+    });
     D.chat_edit = add_edit(L, "chatedit", {40, 438, 560, 470}, "", 120);
     D.send_btn = add_button(L, "send", {570, 434, 720, 474}, T("Send", "Отправить"), do_send_chat);
     D.ready_btn = add_button(L, "ready", {40, 488, 240, 528}, "", [] {
@@ -677,6 +687,28 @@ static void build_dialog()
     D.leave_btn = add_button(L, "leave", {500, 488, 720, 528}, "", [] {
         A.leave();
         set_status(T("Left the session", "Вы вышли из игры"), kYellow, g_status_fix ? 5 : 0);
+    });
+    // ---- Per-stage Rivals page ----
+    auto& R = D.page_rivals;
+    D.rivals_title = add_label(R, {40, 104, 720, 136},
+        T("Choose a mode for every stage", "Выберите режим для каждого этапа"), kGold);
+    static const char* stage_names[5] = {"Cell", "Creature", "Tribe", "Civilization", "Space"};
+    static const char* stage_names_ru[5] = {"Клетка", "Существо", "Племя", "Цивилизация", "Космос"};
+    for (int i = 0; i < 5; ++i) {
+        float y = 150.f + i * 54.f;
+        D.rivals_stage[i] = add_label(R, {48, y + 3, 390, y + 35},
+            T(stage_names[i], stage_names_ru[i]), kWhite);
+        char nm[20];
+        snprintf(nm, sizeof nm, "rivals_stage_%d", i);
+        D.rivals_toggle[i] = add_button(R, nm, {440, y, 690, y + 38}, "", [i] {
+            if (A.can_edit_stage_modes && A.can_edit_stage_modes() && A.toggle_stage_mode)
+                A.toggle_stage_mode(i);
+            g_dirty = true;
+        });
+    }
+    D.rivals_back = add_button(R, "rivals_back", {40, 488, 240, 528}, T("< Lobby", "< Лобби"), [] {
+        g_rivals_page = false;
+        g_dirty = true;
     });
     // ---- Space page ----
     auto& S = D.page_space;
@@ -875,6 +907,26 @@ static void refresh_lobby()
     text(D.leave_btn, host ? T("Stop hosting", "Закрыть игру") : T("Leave", "Выйти"));
 }
 
+static void refresh_rivals()
+{
+    const bool editable = A.can_edit_stage_modes && A.can_edit_stage_modes();
+    for (int i = 0; i < 5; ++i) {
+        static const char* names_en[5] = {"Cell", "Creature", "Tribe", "Civilization", "Space"};
+        static const char* names_ru[5] = {"Клетка", "Существо", "Племя", "Цивилизация", "Космос"};
+        const bool cooperative_only = i == 3; // Civilization is co-op only.
+        const bool rivals = A.stage_mode && A.stage_mode(i) == 1;
+        const char* mode = cooperative_only ? T("Co-op only", "Только кооператив")
+                                             : (rivals ? T("Rivals", "Соперники") : T("Together", "Вместе"));
+        text(D.rivals_stage[i], std::string(T(names_en[i], names_ru[i])) + " - " + mode);
+        text(D.rivals_toggle[i], rivals ? T("Rivals", "Соперники") : T("Together", "Вместе"));
+        color(D.rivals_toggle[i], rivals ? kYellow : kGreen);
+        show(D.rivals_toggle[i], editable && !cooperative_only);
+    }
+    text(D.rivals_title, editable
+        ? T("Choose a mode for every stage", "Выберите режим для каждого этапа")
+        : T("Only the host can change these settings", "Изменять настройки может только хост"));
+}
+
 static void refresh_space()
 {
     auto rows = spaceext::rows_all();
@@ -937,18 +989,24 @@ static void refresh()
     bool space = lobby && A.mode && A.mode() == modes::kSpace;
     if (!space)
         g_space_page = false;
+    if (!lobby)
+        g_rivals_page = false;
     for (Win w : D.page_connect)
         show(w, !lobby);
     for (Win w : D.page_lobby)
-        show(w, lobby && !g_space_page);
+        show(w, lobby && !g_space_page && !g_rivals_page);
+    for (Win w : D.page_rivals)
+        show(w, lobby && g_rivals_page);
     for (Win w : D.page_space)
         show(w, lobby && g_space_page);
-    show(D.space_btn, space && !g_space_page);
+    show(D.space_btn, space && !g_space_page && !g_rivals_page);
+    show(D.rivals_btn, lobby && !g_space_page && !g_rivals_page);
     if (!lobby || g_space_page) {
         show(D.chat_up, false);
         show(D.chat_down, false);
     }
     text(D.subtitle, lobby && g_space_page ? T("CO-OP: SPACE", "КООПЕРАТИВ: КОСМОС")
+                     : lobby && g_rivals_page ? T("CO-OP: STAGE MODES", "КООПЕРАТИВ: РЕЖИМЫ ЭТАПОВ")
                      : lobby ? T("CO-OP LOBBY", "ЛОББИ КООПЕРАТИВА") : T("CO-OP", "КООПЕРАТИВ"));
     if (A.version_line)
         text(D.version, A.version_line());
@@ -956,6 +1014,8 @@ static void refresh()
         A.lan_scan(!lobby);
     if (lobby && g_space_page)
         refresh_space();
+    else if (lobby && g_rivals_page)
+        refresh_rivals();
     else if (lobby)
         refresh_lobby();
     else

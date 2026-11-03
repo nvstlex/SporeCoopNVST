@@ -18,8 +18,12 @@
 #include <thread>
 #include <csignal>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <deque>
+#include <functional>
 #include <map>
+#include <memory>
 #include <string>
 
 #include "adapters.h"
@@ -39,6 +43,8 @@
 #include "autoupdate.h"
 #include "gamefixes.h"
 #include "spacecoop.h"
+#include "space_ext.h"
+#include "space_rivalry.h"
 #include "squadron.h"
 #include "npc.h"
 #include "creature_hp.h"
@@ -71,6 +77,7 @@
 #include "diag_coop.h"
 #include "trace.h"
 #include "view_centres.h"
+#include "rivals_state.h"
 
 static const SkHost* H;
 static SkMod* M;
@@ -115,7 +122,83 @@ struct Remote {
 };
 
 net::Session g_sess;
+rivals::SessionState g_rivals_state;
 std::map<uint8_t, Remote> g_remotes;
+
+// Host-authoritative settings for the five stage modes. Save persistence and faction ownership
+// are deliberately separate follow-up steps; this table currently lives for the session.
+static void rivals_broadcast_state()
+{
+    if (g_sess.role() != net::Role::Host || !g_sess.connected()) return;
+    net::Writer w;
+    rivals::write_state(w, g_rivals_state);
+    g_sess.broadcast_reliable(net::MSG_RIVALS_STATE, w);
+}
+
+static const char* rivals_stage_name(rivals::Stage stage)
+{
+    switch (stage) {
+    case rivals::Stage::Cell: return "cell";
+    case rivals::Stage::Creature: return "creature";
+    case rivals::Stage::Tribe: return "tribe";
+    case rivals::Stage::Civilization: return "civ";
+    case rivals::Stage::Space: return "space";
+    }
+    return "unknown";
+}
+
+static bool rivals_parse_stage(const char* text, rivals::Stage& out)
+{
+    if (!strcmp(text, "cell")) out = rivals::Stage::Cell;
+    else if (!strcmp(text, "creature")) out = rivals::Stage::Creature;
+    else if (!strcmp(text, "tribe")) out = rivals::Stage::Tribe;
+    else if (!strcmp(text, "civ") || !strcmp(text, "civilization")) out = rivals::Stage::Civilization;
+    else if (!strcmp(text, "space")) out = rivals::Stage::Space;
+    else return false;
+    return true;
+}
+extern bool g_lobby_dirty; // defined with the lobby state below
+
+static rivals::StageMode rivals_get_stage_mode(rivals::Stage stage)
+{
+    // Civilization's existing co-op adapter gives each player a city/vehicle ownership
+    // overlay while all players remain one native nation. It is always a shared team,
+    // never a player-vs-player Rivals stage.
+    if (stage == rivals::Stage::Civilization)
+        return rivals::effective_stage_mode(g_rivals_state, stage);
+    if (stage == rivals::Stage::Space && game::mode_id() == modes::kSpace)
+        return spaceext::rivals() ? rivals::StageMode::Rivals : rivals::StageMode::Together;
+    return g_rivals_state.stage_mode(stage);
+}
+
+static bool rivals_apply_stage_mode(rivals::Stage stage, rivals::StageMode mode, std::string& err)
+{
+    if (g_sess.role() != net::Role::Host || !g_sess.connected()) {
+        err = "host only";
+        return false;
+    }
+    // Civilization uses the established cooperative city-sharing adapter: every player
+    // owns/controls a city overlay, but all players are one nation against NPC civilizations.
+    if (stage == rivals::Stage::Civilization && mode == rivals::StageMode::Rivals) {
+        err = "Civilization is cooperative: players share a nation and fight NPC civilizations together";
+        return false;
+    }
+    // Space has its own game-side transition and money split/merge. Do not let the lobby
+    // record a future Space setting that the game cannot apply yet.
+    if (stage == rivals::Stage::Space && game::mode_id() != modes::kSpace) {
+        err = "Space Rivals can only be switched while the Space stage is active";
+        return false;
+    }
+    if (stage == rivals::Stage::Space &&
+        spaceext::rivals() != (mode == rivals::StageMode::Rivals)) {
+        err = rivalry::set_enabled(mode == rivals::StageMode::Rivals);
+        if (!err.empty()) return false;
+    }
+    g_rivals_state.set_stage_mode(stage, mode);
+    rivals_broadcast_state();
+    g_lobby_dirty = true;
+    return true;
+}
 std::string g_name = "Player";
 double g_last_send = 0;
 void* g_last_avatar = nullptr;
@@ -3052,6 +3135,8 @@ void setup_callbacks()
     };
     g_sess.cb.player_join = [](const net::PlayerInfo& p) {
         support::on_player_join(p);
+        if (g_sess.role() == net::Role::Host)
+            rivals_broadcast_state(); // full settings snapshot for the newcomer
         shared::on_player_join(g_sess.role());
         creations::on_player_join(p.id);
         npc::on_player_leave(p.id); // a newcomer under a reused id knows no NPCs yet (BUG-0125)
@@ -3109,6 +3194,18 @@ void setup_callbacks()
         }
     };
     g_sess.cb.custom = [](uint8_t type, uint8_t from, net::Reader& r) {
+        if (type == net::MSG_RIVALS_STATE) {
+            // The host is the sole authority; guests only accept a complete snapshot from player 0.
+            if (g_sess.role() == net::Role::Host || from != 0) return;
+            rivals::SessionState next;
+            if (rivals::read_state(r, next)) {
+                g_rivals_state = next;
+                g_lobby_dirty = true;
+            } else {
+                trace::line("rivals", "rejected malformed stage-state packet from host");
+            }
+            return;
+        }
         if (type == net::MSG_DIAG) { // support diagnostics: clock, marks, sync-check (diag_coop.h)
             support::on_message(from, r);
             return;
@@ -3340,6 +3437,9 @@ void setup_callbacks()
         if (g_role_fix)
             g_roles.erase(id); // ids are reused: the next newcomer starts with no role (BUG-0064)
         shared::on_player_leave(id);
+        g_rivals_state.clear_player(id);
+        if (g_sess.role() == net::Role::Host)
+            rivals_broadcast_state();
         creations::on_player_leave(id); // BUG-0076: the next player of this id is not shown as this one
         npc::on_player_leave(id);       // BUG-0125
         views::forget(id);              // BUG-0280
@@ -3373,6 +3473,7 @@ uint16_t default_port() { return (uint16_t)(net::kDefaultPort + H->instance_id()
 
 void reset_lobby()
 {
+    g_rivals_state.reset();
     if (g_role_fix)
         g_roles.clear(); // a new session starts with no roles (BUG-0064)
     g_ready.clear();
@@ -4424,6 +4525,25 @@ void init_ui()
             share_all();
     };
     a.vote_active = [] { return g_vote.active; };
+    a.stage_mode = [](int stage) {
+        if (stage < 0 || stage >= (int)rivals::kStageCount) return 0;
+        return rivals_get_stage_mode(static_cast<rivals::Stage>(stage)) == rivals::StageMode::Rivals ? 1 : 0;
+    };
+    a.can_edit_stage_modes = [] { return g_sess.role() == net::Role::Host && g_sess.connected(); };
+    a.toggle_stage_mode = [](int stage) {
+        if (g_sess.role() != net::Role::Host || stage < 0 || stage >= (int)rivals::kStageCount) return;
+        H->run_outside_frame([](void* p) {
+            std::unique_ptr<std::function<void()>> fn((std::function<void()>*)p);
+            (*fn)();
+        }, new std::function<void()>([stage] {
+            auto s = static_cast<rivals::Stage>(stage);
+            auto next = rivals_get_stage_mode(s) == rivals::StageMode::Rivals
+                ? rivals::StageMode::Together : rivals::StageMode::Rivals;
+            std::string err;
+            if (!rivals_apply_stage_mode(s, next, err))
+                feed("cannot switch stage mode: " + err);
+        }));
+    };
     a.say = [](const std::string& t) {
         if (support::chat_command(t)) // "/bug <text>" (docs/REPORTING.md#reporting-support)
             return;
@@ -4690,6 +4810,21 @@ SkModInfo g_info = {SK_ABI_VERSION, "coop", COOP_VERSION, on_unload};
 
 } // namespace
 
+namespace rivals {
+StageMode current_stage_mode(Stage stage)
+{
+    return rivals::effective_stage_mode(g_rivals_state, stage);
+}
+bool allows_player_attack(uint8_t attacker, uint8_t target)
+{
+    return rivals::allows_player_attack(g_rivals_state, Stage::Tribe, attacker, target);
+}
+bool allows_player_attack(Stage stage, uint8_t attacker, uint8_t target)
+{
+    return rivals::allows_player_attack(g_rivals_state, stage, attacker, target);
+}
+}
+
 extern "C" SK_EXPORT const SkModInfo* sporekit_mod_main(const SkHost* host, SkMod* self)
 {
     H = host;
@@ -4904,6 +5039,81 @@ extern "C" SK_EXPORT const SkModInfo* sporekit_mod_main(const SkHost* host, SkMo
                    },
                    nullptr, SK_CMD_ANY_THREAD);
     coop_register_debug_commands(H, M);
+    H->command_add(M, "coop.rivals",
+                   "coop.rivals [status | players | <stage> <together|rivals> | relation <id> <id> <neutral|ally|war>] - host Rivals settings",
+                   [](void*, int argc, const char* const* argv, SkOut* out) {
+                       if (g_sess.role() != net::Role::Host) {
+                           H->out_printf(out, "host only (create the session first)");
+                           return 1;
+                       }
+                       if (argc >= 2 && !strcmp(argv[1], "players")) {
+                           for (const auto& player : g_sess.players())
+                               H->out_printf(out, "%u: %s", player.id, player.name.c_str());
+                           return 0;
+                       }
+                       if (argc >= 5 && !strcmp(argv[1], "relation")) {
+                           char* end_a = nullptr;
+                           char* end_b = nullptr;
+                           long a = std::strtol(argv[2], &end_a, 10);
+                           long b = std::strtol(argv[3], &end_b, 10);
+                           if (!end_a || *end_a || !end_b || *end_b || a < 0 || b < 0 ||
+                               a >= rivals::kMaxPlayers || b >= rivals::kMaxPlayers || a == b) {
+                               H->out_printf(out, "usage: coop.rivals relation <player-id> <player-id> <neutral|ally|war>");
+                               return 1;
+                           }
+                           bool have_a = false, have_b = false;
+                           for (const auto& player : g_sess.players()) {
+                               have_a |= player.id == a;
+                               have_b |= player.id == b;
+                           }
+                           if (!have_a || !have_b) {
+                               H->out_printf(out, "both player IDs must be in the current session");
+                               return 1;
+                           }
+                           rivals::Relation relation;
+                           if (!strcmp(argv[4], "neutral")) relation = rivals::Relation::Neutral;
+                           else if (!strcmp(argv[4], "ally")) relation = rivals::Relation::Ally;
+                           else if (!strcmp(argv[4], "war")) relation = rivals::Relation::War;
+                           else {
+                               H->out_printf(out, "relation must be neutral, ally or war");
+                               return 1;
+                           }
+                           g_rivals_state.set_relation((uint8_t)a, (uint8_t)b, relation);
+                           rivals_broadcast_state();
+                           g_lobby_dirty = true;
+                       } else if (argc >= 3) {
+                           rivals::Stage stage;
+                           if (!rivals_parse_stage(argv[1], stage)) {
+                               H->out_printf(out, "unknown stage: %s", argv[1]);
+                               return 1;
+                           }
+                           rivals::StageMode mode;
+                           if (!strcmp(argv[2], "rivals")) mode = rivals::StageMode::Rivals;
+                           else if (!strcmp(argv[2], "together")) mode = rivals::StageMode::Together;
+                           else {
+                               H->out_printf(out, "mode must be together or rivals");
+                               return 1;
+                           }
+                           std::string err;
+                           if (!rivals_apply_stage_mode(stage, mode, err)) {
+                               H->out_printf(out, "cannot switch: %s", err.c_str());
+                               return 1;
+                           }
+                       }
+                       for (uint8_t i = 0; i < rivals::kStageCount; ++i) {
+                           auto stage = static_cast<rivals::Stage>(i);
+                           H->out_printf(out, "%s: %s", rivals_stage_name(stage),
+                               rivals_get_stage_mode(stage) == rivals::StageMode::Rivals ? "rivals" : "together");
+                       }
+                       const char* rel[] = {"neutral", "ally", "war"};
+                       const auto players = g_sess.players();
+                       for (size_t i = 0; i < players.size(); ++i)
+                           for (size_t j = i + 1; j < players.size(); ++j)
+                               H->out_printf(out, "%s / %s: %s", players[i].name.c_str(), players[j].name.c_str(),
+                                   rel[(uint8_t)g_rivals_state.get_relation(players[i].id, players[j].id)]);
+                       return 0;
+                   },
+                   nullptr, SK_CMD_OUTSIDE_FRAME);
     teamplay::Ctx tc;
     tc.partners = partners;
     tc.notice = [](const std::string& t) { notice(t, -1); };
@@ -5133,6 +5343,20 @@ extern "C" SK_EXPORT const SkModInfo* sporekit_mod_main(const SkHost* host, SkMo
     cellsync::Ctx cc;
     cc.sess = &g_sess;
     cc.partners = partners;
+    cc.host_pos = [] (net::Vec3& pos) {
+        if (g_sess.role() == net::Role::Client && g_mode == modes::kCell) {
+            auto it = g_remotes.find(0); // player 0 is always the host
+            if (it == g_remotes.end() || it->second.echo || it->second.buf.empty() ||
+                it->second.buf.age(H->time_seconds()) > 3.0)
+                return false;
+            const auto& state = it->second.buf.latest();
+            if (!(state.flags & net::PF_IN_WORLD) || (state.flags & net::PF_DEAD) || !same_place(state))
+                return false;
+            pos = state.pos;
+            return true;
+        }
+        return false;
+    };
     cc.notice = [](const std::string& t) { notice(t, -1); };
     cc.food_cause = [](int from, int before, int amount) { // Cell (dna_ledger.h)
         LOG("dna: food %d -> %d cause=meal:%d%+d", before, before + amount, from, amount);

@@ -1,14 +1,21 @@
-# Build and unit tests on every push and pull request; a tag "v*" also builds the release zip and
+# Build and unit tests for PRs targeting main and pushes to main; a tag "v*" also builds the release zip and
 # publishes it as a GitHub release (notes: the tag's section of CHANGELOG.md). The game tests need
 # Spore and run on the developer's machine (tools/lab.py, docs/10-dev-pipeline.md), never here.
 name: build
 
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
 
 permissions:
   contents: read
+
+# A new commit to the same PR supersedes its older build instead of queueing duplicate CI runs.
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:

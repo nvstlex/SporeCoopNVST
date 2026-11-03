@@ -21,6 +21,7 @@
 #include "net/validate.h"
 #include "sporekit_game.hpp"
 #include "fixes.h"
+#include "rivals_state.h"
 
 using skg::thiscall;
 using skg::vcall;
@@ -221,6 +222,11 @@ static uint16_t g_rx_cycle = 0xFFFF;
 static uint32_t g_spawned, g_removed, g_cmds_sent;
 static std::vector<void*> g_local_tribe_of; // host tribe index -> local tribe
 
+static bool player_attack_allowed(uint8_t attacker, uint8_t target)
+{
+    return rivals::allows_player_attack(attacker, target);
+}
+
 uint8_t owner_of(void* c)
 {
     if (C.sess && C.sess->role() == net::Role::Host) {
@@ -345,11 +351,44 @@ static int SK_THISCALL h_DoActionForObjects(void* self, void* vec, int action, v
     }
     if (!is_guest() || game::mode_id() != modes::kTribe) {
         if (is_host() && game::mode_id() == modes::kTribe) {
-            char lb[96];
+            char lb[128];
             snprintf(lb, sizeof lb, "action=%d n=%d obj=%p noun=%X", action,
                      vec ? (int)(F<void**>(vec, 4) - F<void**>(vec, 0)) : -1, target, target ? game::noun_id(target) : 0);
             g_last_local = lb;
             g_local_orders++;
+            // In Tribe Rivals, player-vs-player attacks require an explicit War relation.
+            // Keep the game's original order path for NPCs and all non-attack actions.
+            if (action == 7 && is_citizen(target) && F<void*>(target, kOwnerTribeOff) == player_tribe()) {
+                const uint8_t victim = owner_of(target);
+                std::vector<void*> allowed;
+                void** begin = vec ? F<void**>(vec, 0) : nullptr;
+                void** end = vec ? F<void**>(vec, 4) : nullptr;
+                unsigned blocked = 0;
+                for (void** it = begin; it && it < end; ++it) {
+                    void* spatial = *it;
+                    void* attacker = spatial ? (uint8_t*)spatial - 0xC0 : nullptr;
+                    const uint8_t owner = attacker && is_citizen(attacker) ? owner_of(attacker) : 0xFF;
+                    if (owner >= rivals::kMaxPlayers || !player_attack_allowed(owner, victim)) {
+                        ++blocked;
+                        continue;
+                    }
+                    allowed.push_back(spatial);
+                }
+                if (blocked) {
+                    g_last_local += " blocked=" + std::to_string(blocked) + " (not at war)";
+                    if (C.notice) {
+                        if (victim < rivals::kMaxPlayers)
+                            C.notice(C.sess->name_of(C.sess->my_id()) + " cannot attack " +
+                                     C.sess->name_of(victim) + " while not at war");
+                        else
+                            C.notice("Tribe Rivals blocked an attack on an unassigned player tribe member");
+                    }
+                    if (allowed.empty())
+                        return 1;
+                    void* filtered[3] = {allowed.data(), allowed.data() + allowed.size(), allowed.data() + allowed.size()};
+                    return o_DoActionForObjects(self, filtered, action, target, prop);
+                }
+            }
         }
         return o_DoActionForObjects(self, vec, action, target, prop);
     }
@@ -659,6 +698,8 @@ static void host_command(uint8_t from, net::Reader& r)
         g_last_cmd += " rejected: no such target here";
         return; // the object is gone on the host
     }
+    bool relation_blocked = false;
+    uint8_t relation_victim = 0xFF;
     for (uint16_t id : ids) {
         auto it = g_hm_by_id.find(id);
         if (it == g_hm_by_id.end()) {
@@ -672,6 +713,16 @@ static void host_command(uint8_t from, net::Reader& r)
             g_cmds_rejected++;
             continue;
         }
+        if (kind == CMD_ACTION && action == 7 && is_citizen(target) && F<void*>(target, kOwnerTribeOff) == pt) {
+            const uint8_t victim = owner_of(target);
+            if (!player_attack_allowed(from, victim)) {
+                g_cmds_rejected++;
+                relation_blocked = true;
+                relation_victim = victim;
+                g_last_cmd += " rejected: target player is not at war or not assigned";
+                continue;
+            }
+        }
         if (kind == CMD_WALK) {
             void* rec = thiscall<void*>(a_DoAction, c, 4, (void*)nullptr, (void*)nullptr);
             float p[3] = {pos.x, pos.y, pos.z};
@@ -680,6 +731,12 @@ static void host_command(uint8_t from, net::Reader& r)
         } else
             thiscall<void*>(a_DoAction, c, action, target, (void*)nullptr);
         g_cmds_done++;
+    }
+    if (relation_blocked && C.notice) {
+        if (relation_victim < rivals::kMaxPlayers)
+            C.notice(C.sess->name_of(from) + " cannot attack " + C.sess->name_of(relation_victim) + " while not at war");
+        else
+            C.notice(C.sess->name_of(from) + " cannot attack an unassigned player tribe member in Rivals");
     }
 }
 
@@ -2239,6 +2296,33 @@ std::string debug(const std::vector<std::string>& a)
                  (unsigned)members(t).size(), net::dist(tp, c));
         return b;
     }
+    if (!a.empty() && a[0] == "factions") { // read-only native cTribe inventory for the Rivals prototype
+        auto tribes = all_tribes();
+        void* pt = player_tribe();
+        std::string out;
+        char b[256];
+        for (size_t i = 0; i < tribes.size(); ++i) {
+            void* t = tribes[i];
+            if (!t || !game::object_alive(t) || !skg::readable(t, 0x554))
+                continue;
+            auto ms = members(t);
+            void* hut = nullptr;
+            int food = -1;
+            // Both getters are verified cTribe vtable slots in docs/re/tribe.md.
+            if (skg::readable(t, sizeof(void*))) {
+                hut = vcall<void*>(t, 0xAC / 4);
+                food = vcall<int>(t, 0xA4 / 4);
+            }
+            net::Vec3 p = tribe_pos(t);
+            snprintf(b, sizeof b,
+                     "tribe[%u] %p%s pos=(%.1f %.1f %.1f) members=%u hut=%p food=%d archetype=%d food_container=%p\n",
+                     (unsigned)i, t, t == pt ? " PLAYER" : "", p.x, p.y, p.z,
+                     (unsigned)ms.size(), hut, food, (int)F<uint32_t>(t, 0x550),
+                     (void*)((uint8_t*)t + 0x20C));
+            out += b;
+        }
+        return out.empty() ? "no readable cTribe objects" : out;
+    }
     if (!a.empty() && a[0] == "trees") { // trees near the village with their raw fields (RE)
         net::Vec3 at;
         center(at);
@@ -2285,7 +2369,7 @@ std::string debug(const std::vector<std::string>& a)
             out += q.v[i].second;
         return out + std::to_string(q.v.size()) + " objects";
     }
-    return "usage: coop.tribe select <id> <0|1> | select_own <n> <0|1> | walk <x> <y> <z> | act <action> <target id> | objs <noun hex>";
+    return "usage: coop.tribe factions | select <id> <0|1> | select_own <n> <0|1> | walk <x> <y> <z> | act <action> <target id> | objs <noun hex>";
 }
 
 // the citizen's current behaviour-tree node (ai = c+0xB4C, node id at ai+0x1D8; docs/re/tribe.md B)

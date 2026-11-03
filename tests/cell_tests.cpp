@@ -18,6 +18,35 @@ static int g_fail = 0;
         }                                                         \
     } while (0)
 
+// Four players need stable, non-overlapping Cell spawn slots around the host.
+static void player_spawn_slots()
+{
+    const auto host = player_spawn_offset(0);
+    const auto p1 = player_spawn_offset(1);
+    const auto p2 = player_spawn_offset(2);
+    const auto p3 = player_spawn_offset(3);
+    CHECK(std::fabs(host.x) < 0.001f && std::fabs(host.y) < 0.001f);
+    auto dist = [](SpawnOffset a, SpawnOffset b) {
+        const float x = a.x - b.x, y = a.y - b.y;
+        return std::sqrt(x * x + y * y);
+    };
+    CHECK(std::fabs(dist(host, p1) - 4.5f) < 0.001f);
+    CHECK(std::fabs(dist(host, p2) - 4.5f) < 0.001f);
+    CHECK(std::fabs(dist(host, p3) - 4.5f) < 0.001f);
+    // The same layout degrades cleanly to two and three connected players.
+    CHECK(dist(host, p1) > 4.f); // 2 players: host + guest 1
+    CHECK(dist(host, p2) > 4.f); // 3 players: host + guests 1..2
+    CHECK(dist(p1, p2) > 7.7f);
+    CHECK(dist(p2, p3) > 7.7f);
+    CHECK(dist(p3, p1) > 7.7f);
+    CHECK(player_spawn_offset(1).x == p1.x && player_spawn_offset(1).y == p1.y);
+    CHECK(std::fabs(dist(host, player_spawn_offset(1, 100.f)) - 20.f) < 0.001f);
+    CHECK(std::fabs(dist(host, player_spawn_offset(2, 0.f)) - 3.f) < 0.001f);
+    CHECK(std::fabs(dist(host, player_spawn_offset(3, NAN)) - 4.5f) < 0.001f);
+    const auto invalid = player_spawn_offset(4);
+    CHECK(std::fabs(invalid.x) < 0.001f && std::fabs(invalid.y) < 0.001f);
+}
+
 // BUG-0083: slot == highWater is not a live slot, and nothing past the capacity is read
 static void slots()
 {
@@ -241,6 +270,7 @@ int main(int argc, char** argv)
     for (int i = 1; i < argc; i++)
         if (!strcmp(argv[i], "--old-trim"))
             g_meals_trim = false; // the 0.7.3.0 code: meals_old_host must fail
+    player_spawn_slots();
     slots();
     spawn_slot();
     rounds();

@@ -112,6 +112,8 @@ endif
 	$(B)/host/npc_tests
 	$(HOSTCXX) -std=c++20 -O1 -g -Wall $(SAN) -Imods/coop -o $(B)/host/space_tests tests/space_tests.cpp
 	$(B)/host/space_tests
+	$(HOSTCXX) -std=c++20 -O1 -g -Wall -Imods/coop -o $(B)/host/rivals_tests tests/rivals_tests.cpp
+	$(B)/host/rivals_tests
 	$(HOSTCXX) -std=c++20 -O1 -g -Wall $(SAN) -Imods/coop -o $(B)/host/text_tests tests/text_tests.cpp
 	$(B)/host/text_tests
 	@mkdir -p $(B)/host/jpeg
