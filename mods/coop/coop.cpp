@@ -5343,6 +5343,20 @@ extern "C" SK_EXPORT const SkModInfo* sporekit_mod_main(const SkHost* host, SkMo
     cellsync::Ctx cc;
     cc.sess = &g_sess;
     cc.partners = partners;
+    cc.host_pos = [] (net::Vec3& pos) {
+        if (g_sess.role() == net::Role::Client && g_mode == modes::kCell) {
+            auto it = g_remotes.find(0); // player 0 is always the host
+            if (it == g_remotes.end() || it->second.echo || it->second.buf.empty() ||
+                it->second.buf.age(H->time_seconds()) > 3.0)
+                return false;
+            const auto& state = it->second.buf.latest();
+            if (!(state.flags & net::PF_IN_WORLD) || (state.flags & net::PF_DEAD) || !same_place(state))
+                return false;
+            pos = state.pos;
+            return true;
+        }
+        return false;
+    };
     cc.notice = [](const std::string& t) { notice(t, -1); };
     cc.food_cause = [](int from, int before, int amount) { // Cell (dna_ledger.h)
         LOG("dna: food %d -> %d cause=meal:%d%+d", before, before + amount, from, amount);
